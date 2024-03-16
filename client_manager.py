@@ -29,8 +29,8 @@ class Client:
     
     def display_detailed_email(self, email):
         parser = ParsedEmail(email)
-        parser.display_email()
-
+        return_str = parser.display_str()
+        return return_str
    
         
 
@@ -42,11 +42,12 @@ class Client:
               
               
 
-
 def main() -> None:
     client = Client()
-    if client.safe_load():
-        client.display_emails()
+    client.load()
+    email = client.emails[0]
+    msg = client.display_detailed_email(email)
+    print(msg)
     client.close()
 
 if __name__ == "__main__":

@@ -11,10 +11,8 @@ from urllib.parse import urlparse, parse_qs, unquote
 class ParsedEmail:
     def __init__(self, emailObject) -> None:
         self.email_obj = emailObject
-        self._body = emailObject.HTMLBody if hasattr(emailObject, 'HTMLBody') else emailObject.Body
-        self.urls = []  
-        self.dirty_urls = []  
-        self.clean_body = self.parse_body()   
+        self._body = emailObject.Body
+        self.urls = self.extract_urls()
         self.header = self.email_obj.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x007D001E")
 
     def decode_safelink(self, url):
@@ -23,49 +21,36 @@ class ParsedEmail:
         original_url = query_params.get('url', [None])[0]
         if original_url:
             return unquote(original_url)
+    
+    def extract_urls(self):
+        soup = BeautifulSoup(self._body, "html.parser")
+        for link in soup.find_all('a'):
+            url = link.get('href')
+            if url:
+                if "safelinks.protection.outlook.com" in url:
+                    url = self.decode_safelink(url)
+                self.urls.append(url)
 
-    def parse_body(self):
-        rmved_html = self.strip_html(self._body)
-        return self.clean_text(rmved_html)   
 
-    def a_tag_rmver(self, a: Tag) -> str:
-        url = a['href']
-           
-        if "safelinks.protection.outlook.com" in url:
-            cleaned_url = self.decode_safelink(url)  
-            self.urls.append(cleaned_url)   
-            url = cleaned_url  
-
-        if a.string:
-            a.replace_with(f"[ URL ]")
-        else:
-            a.replace_with(f"[URL: {url}]")
-            
-        self.urls.append(url)
-
-    def strip_html(self, html: str) -> str:
-        soup = BeautifulSoup(html, 'html.parser')
-        for a in soup.find_all('a', href=True):
-            self.a_tag_rmver(a)
-        return soup.get_text(separator="\n")
-
-    def clean_text(self, text: str) -> str:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        replaced = "\n".join(lines)
-        console_width = shutil.get_terminal_size().columns  # Use console width directly
-        wrapped_text = "\n".join([textwrap.fill(line, width=console_width) for line in replaced.split('\n')])
-        return wrapped_text
-
-    def display(self):
-        print("===============================================")
-        print(f"[ SUBJECT: { self.email_obj.Subject } ]")  # Use .Subject
-        print(f"[ FROM: { self.email_obj.SenderEmailAddress } ]")
-        print(f"[ SENDER ADDRESS: { self.email_obj.SenderName } ]")
-        print(f"[ RECEIVED: { self.email_obj.ReceivedTime } ]")
-        print("===============================================")
-        print("*** BODY ***".center(80))
-        print(self.clean_body)
+    def display_str(self):
+        return f"""
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+| Subject Line: { self.email_obj.Subject }                                                |
+| From: { self.email_obj.SenderEmailAddress }                                             | 
+| Date: { self.email_obj.SentOn }                                                         |
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *   
+   Contents 
+   
+   { self._body }     
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+        """
+    
+    
     
     def view_urls(self):
+        print("\t\t\t[ URLS FOUND ]")
         for url in self.urls:
-            print(f"\t\t=> { url }")
+            print(f"\t=> { url }")
+    
+    def display_header(self):
+        print(f"\t\t\t[ HEADER ]\n{ self.header }")

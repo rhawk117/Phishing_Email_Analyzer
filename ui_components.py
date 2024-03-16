@@ -89,10 +89,10 @@ class EmailMenu(MenuUI):
     
 
     def _generate_email_str(self, email):
-        format_str = "=" * 50
-        return_str = f"{format_str}\n | SUBJECT: {email.Subject} ({email.SentOn})\n"
-        return_str += f"| SENDER: {email.SenderName}\n"
-        return_str += f"| ADDRESS: {email.SenderEmailAddress}\n{format_str}"
+        format_str = "-" * 50
+        return_str = f"\n| SUBJECT: {email.Subject} ({email.SentOn})\n"
+        return_str += f" | SENDER: {email.SenderName}\n"
+        return_str += f" | ADDRESS: {email.SenderEmailAddress}\n{format_str}"
         return return_str
 
     
@@ -140,8 +140,10 @@ def testEmailMenu():
         client.emails
     )
     email = emailMenu.run()
-    client.display_detailed_email(email)
-
+    msg = client.display_detailed_email(email)
+    
+    print(msg)
+    
 def main() -> None:
     # testMainMenu()
     testEmailMenu()
