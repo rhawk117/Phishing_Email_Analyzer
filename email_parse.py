@@ -30,17 +30,18 @@ class ParsedEmail:
 
     def a_tag_rmver(self, a: Tag) -> str:
         url = a['href']
-        self.dirty_urls.append(url)   
-        
+           
         if "safelinks.protection.outlook.com" in url:
             cleaned_url = self.decode_safelink(url)  
             self.urls.append(cleaned_url)   
             url = cleaned_url  
 
         if a.string:
-            a.replace_with(f"{a.string} [URL: {url}]")
+            a.replace_with(f"[ URL ]")
         else:
             a.replace_with(f"[URL: {url}]")
+            
+        self.urls.append(url)
 
     def strip_html(self, html: str) -> str:
         soup = BeautifulSoup(html, 'html.parser')
@@ -64,11 +65,7 @@ class ParsedEmail:
         print("===============================================")
         print("*** BODY ***".center(80))
         print(self.clean_body)
-        print("===============================================")
-        print("*** UNPARSED URLs ***".center(80))
-        for url in self.dirty_urls:
-            print(url)
-        print("===============================================")
-        print("*** PARSED URLs ***".center(80))
-        for url in self.urls:  # Ensure this list is populated with clean URLs
-            print(url)
+    
+    def view_urls(self):
+        for url in self.urls:
+            print(f"\t\t=> { url }")
