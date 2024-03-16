@@ -30,10 +30,12 @@ class MainMenu(MenuUI):
                 "Help / Tutorial",
                 "Exit Program"
         ]
+        
         super().__init__(
             "<< SELECT AN OPTION TO CONTINUE >>",
             CHOICES
         )
+        
     def _hndler(self, response):
         if response == "Option 1: Do something":
             print("Doing something...")
@@ -47,23 +49,13 @@ class MainMenu(MenuUI):
         else:
             print("Invalid option")
 
-class Pager:
-    def __init__(self, num_options: int):
-        self.page_size = 10
-        self.cur_page = 0
-        self.max_pages = num_options // self.page_size
-    
-    def Next(self):
-        if self.cur_page < self.max_pages:
-            self.cur_page += 1
-        else:
-            self.cur_page = 0
+
 
 class EmailMenu(MenuUI):
-    def __init__(self, prompt: str, emails: list):
+    def __init__(self, prompt: str, emails: list, mainMenu: MainMenu):
         self.prompt: str = prompt
         self.emails: list = emails
-        
+        self.MainMenu: MainMenu = mainMenu
         self.current_page: int = 0
         self.page_size: int = 10
         self.num_pages: int = (len(emails)) // self.page_size
@@ -74,9 +66,9 @@ class EmailMenu(MenuUI):
     def page_options(self):
         if self.current_page > 0:
             self.choices.append("Go Back")
-            
         if self.current_page < self.num_pages:
             self.choices.append("Next Page")
+        self.choices.append("Return to Main Menu")
 
     def _render_page(self):
         start_index = self.current_page * self.page_size
@@ -89,10 +81,9 @@ class EmailMenu(MenuUI):
     
 
     def _generate_email_str(self, email):
-        format_str = "-" * 50
         return_str = f"\n| SUBJECT: {email.Subject} ({email.SentOn})\n"
         return_str += f" | SENDER: {email.SenderName}\n"
-        return_str += f" | ADDRESS: {email.SenderEmailAddress}\n{format_str}"
+        return_str += f" | ADDRESS: {email.SenderEmailAddress}"
         return return_str
 
     
@@ -108,10 +99,9 @@ class EmailMenu(MenuUI):
         elif choice == "Go Back":
             self.current_page -= 1
             return False
-
         else:
-            print("[i] Loading Email.. [i]")
             return True
+            
 
     def _bounce(self):
         if self.current_page == self.num_pages:
@@ -122,11 +112,50 @@ class EmailMenu(MenuUI):
         while self._hndler(choice) == False:
             self._render_page()
             choice = self._get_choice()
-            self._hndler(choice)
             self._bounce()
             
+        # since choice isn't in the menu_map
+        if choice == "Return to Main Menu":
+            self.MainMenu.run()
+            return None
+        
         return self.menu_map[choice]
+    
+
+class EmailViewer(MenuUI):
+    def __init__(self, parser_obj: ParsedEmail, emailMenu: EmailMenu) -> None:
+        self.prompt = "<< Select an Action >>"
+        self.choices = ["[ View Contents (Body) ]", "[ View URLs ]", "[ View Email Header ]", "[ Go Back ]"]
+        self.email_data = parser_obj
+        self.email_menu = emailMenu
+    
+    def construct_prompt(self, email_str):
+        prompt = "<< Select Desired Action On Email >>"
+    
+    def go_back(self):
+        input("Press Enter to go back...")
+        self.email_menu.run()
+    
+    def _hndler(self, response):
+        if response == "[ View Contents (Body) ]":
+            print(self.email_data.display_str())
+        
+        elif response == "[ View URLs ]":
+            print("[i] Loading URLs... [i]")
+            self.email_data.view_urls()
             
+        
+        elif response == "[ View Email Header ]":
+            print("[i] Loading Email Header... [i]")
+            self.email_data.display_header()
+        
+        elif response == "[ Go Back ]":
+            self.email_menu.run()
+        
+        else:
+            raise Exception("Invalid unhandled option selected!")
+
+
     
 
 def testMainMenu():
@@ -137,12 +166,17 @@ def testEmailMenu():
     client = Client()
     emailMenu = EmailMenu(
         "Select an email to view",
-        client.emails
+        client.emails,
+        MainMenu()
     )
-    email = emailMenu.run()
-    msg = client.display_detailed_email(email)
     
-    print(msg)
+    email = emailMenu.run()
+    parsed_email = client.parsed_email(email)
+    if parsed_email is None:
+        return 
+    email_viewer = EmailViewer(parsed_email, emailMenu)
+    email_viewer.run()
+    
     
 def main() -> None:
     # testMainMenu()

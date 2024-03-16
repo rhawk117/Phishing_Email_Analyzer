@@ -27,10 +27,8 @@ class Client:
             print("[!] Failed to load Outlook, for more information check program logs.")
             return False
     
-    def display_detailed_email(self, email):
-        parser = ParsedEmail(email)
-        return_str = parser.display_str()
-        return return_str
+    def parsed_email(self, email) -> ParsedEmail: 
+        return ParsedEmail(email)
    
         
 
@@ -46,8 +44,7 @@ def main() -> None:
     client = Client()
     client.load()
     email = client.emails[0]
-    msg = client.display_detailed_email(email)
-    print(msg)
+    clean_email = client.parsed_email(email)
     client.close()
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import re
 import textwrap
 import shutil
 from urllib.parse import urlparse, parse_qs, unquote
-
+from pprint import pprint
 
 class ParsedEmail:
     def __init__(self, emailObject) -> None:
@@ -39,18 +39,23 @@ class ParsedEmail:
 | From: { self.email_obj.SenderEmailAddress }                                             | 
 | Date: { self.email_obj.SentOn }                                                         |
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *   
-   Contents 
-   
-   { self._body }     
-* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-        """
+|   Contents                                                                              |  
+|                                                                                         |  
+|   { self._body }                                                                        |
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+"""
     
     
     
     def view_urls(self):
-        print("\t\t\t[ URLS FOUND ]")
+        if not self.urls:
+            print("\t\t\t[ NO URLS FOUND ]")
+            return
+        
+        print(f"\t\t\t[ URLS FOUND {len(self.urls)} ]")
         for url in self.urls:
             print(f"\t=> { url }")
     
     def display_header(self):
-        print(f"\t\t\t[ HEADER ]\n{ self.header }")
+        print(f"[ EMAIL HEADER ]\n")
+        pprint(self.header, indent=4)
