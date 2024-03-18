@@ -1,139 +1,151 @@
 from client_manager import Client
 from email_parse import Email, DetailedEmail
-import questionary
+from questionary import Choice, prompt
+import sys
+from time import sleep
+
+
 
 class MenuUI:
-    def __init__(self, prompt, choices) -> None:
+    def __init__(self, prompt: str, choices:list) -> None:
         self.prompt = prompt
         self.choices = choices
-        
-    
-    def _get_choice(self):
-        return questionary.select(
-            self.prompt,
-            choices=self.choices
-        ).ask()
+            
+    def _ask(self):
+        question = [
+            {
+                "type": "select",
+                "name": "choice",
+                "message": self.prompt,
+                "choices": self.choices
+            }
+        ]
+        answer = prompt(question)
+        return answer["choice"]
     
     def run(self):
-        usrSlct = self._get_choice()
-        self._hndler(usrSlct)
+        return self._ask()
          
-    def _hndler(self, response):
-        pass
-
         
 class MainMenu(MenuUI):
+    TITLE_TEXT = """
+***********************************************************************
+        _     _     _     _                         _                 
+  _ __ | |__ (_)___| |__ (_)_ __   __ _   ___ _ __ (_)_ __   ___ _ __ 
+ | '_ \| '_ \| / __| '_ \| | '_ \ / _` | / __| '_ \| | '_ \ / _ \ '__|
+ | |_) | | | | \__ \ | | | | | | | (_| | \__ \ | | | | |_) |  __/ |   
+ | .__/|_| |_|_|___/_| |_|_|_| |_|\__, | |___/_| |_|_| .__/ \___|_|   
+ |_|                              |___/              |_|             
+    
+                    made by: @rhawk117
+        
+***********************************************************************
+    
+    """
     def __init__(self) -> None:
         CHOICES = [
-                "[ Load Outlook Inbox ]",
-                "[ Paste Email Header ]",
-                "[ Help / Tutorial ]",
-                "[ Exit Program ]"
+            "[ Load Outlook Inbox ]",
+            "[ Analysis Tools ]",
+            "[ Help / Tutorial ]",
+            "[ Exit Program ]"
         ]
-        
         super().__init__(
-            "<< SELECT AN OPTION TO CONTINUE >>",
+            " << Welcome to Phish Sniper, Select an Option To Continue >>",
             CHOICES
         )
         
-    def _hndler(self, response):
-        if response == "Option 1: Do something":
-            print("Doing something...")
-
-        elif response == "Option 2: Do something else":
-            print("Doing something else...")
-
-        elif response == "Exit":
-            print("Exiting...")
-
-        else:
-            print("Invalid option")
-
-
+    def exit_hndler(self) -> None:
+       print("[i] Exiting Program... [i]")
+       sys.exit()
+       
+    def help_hndler(self):
+        pass
+    
+    def help_text(self, text: str) -> None:
+        print(f'[i] { text } [i]')
+        sleep(5)
 
 class EmailMenu(MenuUI):
-    def __init__(self, prompt: str, emails: list, mainMenu: MainMenu):
-        self.prompt: str = prompt
-        self.emails: list = emails
-        self.MainMenu: MainMenu = mainMenu
+    def __init__(self, emails: list):
         self.current_page: int = 0
         self.page_size: int = 10
         self.num_pages: int = (len(emails)) // self.page_size
         
+        self.prompt: str = f'Select an Email From your Inbox (Page {self.current_page + 1}/{self.num_pages})'
+        self.emails: list = emails
         self.choices: list = []
-        self.menu_map: dict = {}
     
     def page_options(self):
         if self.current_page > 0:
-            self.choices.append("Go Back")
+            self.choices.append(Choice(title="Go Back", value="back"))
             
         if self.current_page < self.num_pages:
-            self.choices.append("Next Page")
+            self.choices.append(Choice(title="Next Page", value="next"))
             
-        self.choices.append("Return to Main Menu")
+        self.choices.append(Choice(title="Return to Main Menu", value="main_menu"))
 
     def _render_page(self):
         ''''
             Generates a page of the next 10 emails to display
             (god this took so long to figure out...)
         '''
+
         start_index = self.current_page * self.page_size
         end_index = min(start_index + self.page_size, len(self.emails))
-        page_emails = [Email(self.emails[i]) for i in range(start_index, end_index)]
-        self.choices = [email.menu_view() for email in page_emails]
-        self.menu_map = dict(zip(self.choices, page_emails))
+        # COM Objecs are read only, can't slice a list with them
+        page_emails = [self.emails[i] for i in range(start_index, end_index)]
+        self.map_options(page_emails)
         self.page_options()
+        self.prompt: str = f'Select an Email From your Inbox (Page {self.current_page + 1}/{self.num_pages})'
 
+    def map_options(self, page_emails: list):
+        self.choices = [Choice(title=self.menu_view(email), value=email) for email in page_emails]
 
-    def _hndler(self, choice):
+    def menu_view(self, email: Email):
+        return f"[ {email.Subject} ]\t ( {email.SenderEmailAddress} )"
+        
+
+    def _pager(self, choice):
         if choice is None:
             return False # choice should only be None on first iter
         
-        if choice == "Next Page":
+        if choice == "next":
             self.current_page += 1
             return False
 
-        elif choice == "Go Back":
+        elif choice == "back":
             self.current_page -= 1
             return False
-        else: # choice is an email, end pager
+        
+        else: 
             return True
-            
-
-    def _bounce(self):
-        '''
-        ensures that we don't have a buffer overflow and
-        fall into the "gap of death"
-        '''
-        if self.current_page == self.num_pages:
-            self.current_page = 0
-            
+                    
     def run(self):
         choice = None
-        while self._hndler(choice) == False:
+        while self._pager(choice) == False:
             self._render_page()
-            choice = self._get_choice()
-            self._bounce()
-            
-        # since choice isn't in the menu_map
-        if choice == "Return to Main Menu":
-            self.MainMenu.run() # place holder for now
+            choice = self._ask()
+        if choice == "main_menu":
             return None
         
-        return self.menu_map[choice]
+        return choice
     
 class EmailViewer(MenuUI):
-    def __init__(self, email_data: Email, emailMenu: EmailMenu) -> None:
+    def __init__(self, email_data: Email) -> None:
         CHOICES = [
-            "[ View Contents (Body) ]", 
-            "[ View URLs ]", 
-            "[ View Email Header ]",
-            "[ View WHOIS Information ]", 
-            "[ Go Back ]"
+            Choice(title="[ View Contents (Body) ]",  value="body")
+            Choice(title="[ View Parsed URLs ]",  value="urls")
+            Choice(title="[ View Email Header ]", value="header")
+            Choice(title="[ View WHOIS Information ]",  value="whois")
+            Choice(title="[ Go Back ]", value="back")
         ]
         self.Data = DetailedEmail(email_data)
+        super().__init__(
+            "<< Select the next Action to view",
+            CHOICES
+        )
         
-    def _hndler(self, response):
+    def _pager(self, response):
         if response == "View Contents (Body)":
             print(self.Data.body)
             input("Press Enter to continue...")
@@ -160,16 +172,15 @@ def testMainMenu():
 
 def testEmailMenu():
     client = Client()
+    if not client.safe_load():
+        print("[!] Failed to load client... [!]")
+        sys.exit()
     emailMenu = EmailMenu(
-        "Select an email to view",
-        client.emails,
-        MainMenu()
+        client.emails
     )
     
     email = emailMenu.run()
-    email_viewer = EmailViewer(email, emailMenu)
-    email_viewer.run()
-    
+    print(email.Body)
 
 # Rough Idea (rn)
 '''

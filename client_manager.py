@@ -4,9 +4,6 @@ import logging
 
 
 class Client:
-    def __init__(self) -> None:
-        self.safe_load()
-
     def load(self):
         self.outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
         self.inbox = self.outlook.GetDefaultFolder(6)  # 6 corresponds to the Inbox

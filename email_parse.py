@@ -7,56 +7,18 @@ from typing import Dict, List
 import whois
 from datetime import datetime
 import os 
-import requests
+from analysis_template import Reason, Report
 
 
-        
+# NOTE
+# Reason ctor (name: str, val, reason: str, score_incr: int)
+# Report ctor (type: str, who: str) type is what type of analysis was done, who is the entity analyzed
 
-class Email:
-    def __init__(self, email):        
-        self.data = email
-        self.sender = email.SenderEmailAddress
-
-    def menu_view(self) -> str:
-        return f"""
-        * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
-        | Subject Line: { self.data.Subject }                                                |
-        | From: { self.sender }                                                               | 
-        | Date: { self.data.SentOn }                                                         |
-        * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-    """       
-        
-        
-class DetailedEmail(Email):
-    def __init__(self, data):
-        super().__init__(data)
-        self.header = data.PropertyAccessor.GetProperty(
-            "http://schemas.microsoft.com/mapi/proptag/0x007D001E"
-        )
-        self.urls = self.extract_urls(self.data.body)
-        self.auth_results = AuthResults(self.header)
-    
-    
-    
-    def analyze_body(self):
-        body = BodyAnalyzer(self.data.body)
-        return body.score()
-    
-    def analyze_domain(self):
-        domain = self.sender.split('@')[1]
-        domain_analyzer = WhoIsAnalyzer(domain)
-        return domain_analyzer.score()
-    
-
-        
-   
-    
-    
-
+            
 class BodyAnalyzer:
     def __init__(self, email_body: str) -> None:
         self.body = email_body
-        self.urls = self.extract_urls()
+        self.urls = self.extract_urls(email_body)
         self.report = {}
         urgency_words = [
         "urgent", "immediate", "action", "now", "limited", "offer",
@@ -79,7 +41,7 @@ class BodyAnalyzer:
         "click to get", "click to remove", "collect now", "contact us",
         "download now", "enroll now", "find out more", "get it now",
         ]
-        self.URGNCY_WRDS = set(urgency_words)
+        self.URGNCY_WRDS: set = set(urgency_words)
         
     def score(self):
         words = self.body.lower().split()
@@ -99,7 +61,6 @@ class BodyAnalyzer:
             url = self.parse_safelink(href)
             urls.append(url)
         
-        # for urls in the email body not in tags
         url_pattern = regex.compile(r'https?://\S+')
         matches = url_pattern.findall(str(soup))
         for match in matches:
@@ -117,7 +78,12 @@ class BodyAnalyzer:
             if original_url:
                 return unquote(original_url)
         return url
-        
+
+    def display_urls(self):
+        if not self.urls:
+            print("[ No URLs were found in the email body ]")
+            return
+        pprint(self.urls)
         
 class AuthResults:
     def __init__(self, header: str) -> None:
@@ -125,12 +91,9 @@ class AuthResults:
         self.spf = None
         self.dkim = None
         self.dmarc = None
-        self._set_attrs()
+        [setattr(self, key, value) for key, value in self.results.items()]
         
     def parse_authentication_results(self, email_header) -> Dict[str, str]:
-        """
-            Extracts the authentication results from the data header.
-        """
         patterns = {
             'spf': r'spf=(\w+)',
             'dkim': r'dkim=(\w+)',
@@ -143,20 +106,14 @@ class AuthResults:
                 continue
             auth_results[key] = match.group(1)
         return auth_results
-    
-    def _set_attrs(self):
-        for key, value in self.results.items():
-            setattr(self, key, value)
+        
+            
 
     def __str__(self) -> str:
-        return f"""
-        [ AUTHENTICATION RESULTS ] 
-        SPF: { self.spf } 
-        DKIM: { self.dkim }
-        DMARC: { self.dmarc }
-        """
+        return f"[ AUTHENTICATION RESULTS ]\n SPF: { self.spf } \n DKIM: { self.dkim } \n DMARC: { self.dmarc }"
         
     def score(self) -> int:
+        score = 0
         for value in self.results.values():
             if value != 'pass':
                 score += 5
@@ -165,7 +122,7 @@ class AuthResults:
 class WhoIsAnalyzer:
     def __init__(self, domain_name: str) -> None:
         self.domain_name = domain_name
-        self.whois_info = self.fetch_whois_info()
+        self.whois_info = self.query_whois()
         if self.whois_info is None:
             print(f"[!] Failed to fetch WHOIS data for { self.domain_name }")
             return
@@ -194,11 +151,9 @@ class WhoIsAnalyzer:
         }
         self.report = {}
 
-    def fetch_whois_info(self) -> Dict[str, Any]:
-       
+    def query_whois(self) -> Dict[str, Any]:
         try:
             return whois.whois(self.domain_name)
-        
         except Exception as e:
             print(f"Failed to fetch WHOIS data: { e }")
             return None
