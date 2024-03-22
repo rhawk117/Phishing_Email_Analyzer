@@ -130,36 +130,53 @@ class EmailMenu(MenuUI):
         
         return choice
     
+    
+    
 class EmailViewer(MenuUI):
-    def __init__(self, email_data: Email) -> None:
+    def __init__(self, email_obj) -> None:
         CHOICES = [
-            Choice(title="[ View Contents (Body) ]",  value="body")
-            Choice(title="[ View Parsed URLs ]",  value="urls")
-            Choice(title="[ View Email Header ]", value="header")
-            Choice(title="[ View WHOIS Information ]",  value="whois")
+            Choice(title="[ View Contents ]",  value="views"),
+            Choice(title="[ Analyze Body ]",  value="urls"),
+            Choice(title="[ Analyze Header ]", value="header"),
+            Choice(title="[ Analyze Domain ]",  value="whois"),
+            Choice(title="[ Analyze All ]", value="all"),
+            Choice(title="[ Go Back ]", value="back"),
+        ]
+        super().__init__(
+            "[ Select Analysis Action to perform on Email ]",
+            CHOICES
+        )
+        self.email = email_obj
+        
+class Views:
+    def __init__(self) -> None:
+        CHOICES = [
+            Choice(title="[ View Header ]", value="header"),
+            Choice(title="[ View Body ]", value="body"),
+            Choice(title="[ View WhoIs ]", value="whois"),
+            Choice(title="[ View Email Contents ]", value="content"),
             Choice(title="[ Go Back ]", value="back")
         ]
-        self.Data = DetailedEmail(email_data)
         super().__init__(
-            "<< Select the next Action to view",
+            "[ What would you like to view ]",
             CHOICES
         )
         
-    def _pager(self, response):
-        if response == "View Contents (Body)":
-            print(self.Data.body)
-            input("Press Enter to continue...")
-            
-        elif response == "View URLs":
-            print(self.Data.urls)
-        elif response == "View Email Header":
-            print(self.Data.header)
-            
-        elif response == "View WHOIS Information":
-            print(self.Data.view_whois())
-            
-        elif response == "Go Back":
-            print("Going back...")
+class ReportCreator:
+    def __init__(self, Report) -> None:
+        self.report = Report
+        CHOICES = [
+            "[ Create Short Report]",
+            "[ Create Detailed Report]",
+            "[ Export Report]",
+            "[ Go Back ]"
+        ]
+    def handler(self, choice):
+        pass
+        
+
+
+
         
     
 

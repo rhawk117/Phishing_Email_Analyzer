@@ -13,7 +13,7 @@ class HeaderExtractor:
     def __init__(self, header_str: str) -> None:
         self.header_txt = header_str
         if not self.safe_parse():
-            raise ValueError("[!] Failed to parse the email header")
+            raise ValueError("[!] Failed to parse the email header [!]")
         self.parse_fields()
     
     def safe_parse(self):
@@ -36,6 +36,12 @@ class HeaderExtractor:
     def field_is_unset(self, field):
         return field == "Not Found"
     
+    def display(self):
+        pprint(self.data(), indent=4) 
+    
+    def data(self) -> dict:
+        pass
+        
 class XHeaderInfo(HeaderExtractor):
     def __init__(self, header_str: str) -> None:
         super().__init__(header_str)
@@ -50,7 +56,7 @@ class XHeaderInfo(HeaderExtractor):
         self.ms_auth_source = self.fetch("X-MS-Exchange-Organization-AuthSource")
         self.ms_auth_as = self.fetch("X-MS-Exchange-Organization-AuthAs")
     
-    def view(self) -> dict:
+    def data(self) -> dict:
         return {
             "X-Mailer": self.x_mailer,
             "X-Forefront-Antispam-Report": self.forefront_antispam_report,
@@ -63,9 +69,8 @@ class XHeaderInfo(HeaderExtractor):
         }
     def __str__(self) -> str:
         return "[ X-Header Information ]\n" + str(self.view())
-
-
-
+    
+    
 class HeaderInfo(HeaderExtractor):
     def __init__(self, header_str: str) -> None:
         super().__init__(header_str)
@@ -75,7 +80,7 @@ class HeaderInfo(HeaderExtractor):
         self.msg_from = self.fetch("From")
         self.reply_to = self.fetch("Reply-To")
     
-    def view(self) -> dict:
+    def data(self) -> dict:
         return {
             "Return-Path": self.return_path,
             "From": self.msg_from,
@@ -91,11 +96,10 @@ class AuthResults(HeaderExtractor):
         self.dkim = None
         self.dmarc = None
         self.compauth = None
-        self.reason = None
-        super().__init__(header_str)
+        super.__init__(header_str)
         self.parse_fields()
 
-    def parse_fields(self):
+    def parse_fields(self) -> None:
         self.parse_auth_results()
     
     def parse_auth_results(self):
@@ -118,39 +122,15 @@ class AuthResults(HeaderExtractor):
                 setattr(self, key, match.group(1))
             else:
                 setattr(self, key, "Not Found") 
-    
-    def view(self) -> dict:
+                
+    def data(self) -> dict:
         return {
-            "SPF": self.spf,
-            "DKIM": self.dkim,
-            "DMARC": self.dmarc,
+            "Spf": self.spf,
+            "Dkim": self.dkim,
+            "Dmarc": self.dmarc,
             "CompAuth": self.compauth,
-            "Reason":  self.reason,
+            "Reason": self.reason
         }
-    
-    
-    def __str__(self) -> str:
-        return f"[ Authentication Results ] { self.view() }"
-        
-        
-        
-        
-
-class HeaderFields:
-    def __init__(self,header_str):
-        self.header = header_str
-        self.header_data = HeaderInfo(header_str)
-        self.xheader = XHeaderInfo(header_str)
-        self.auth_resultss = AuthResults(header_str)
-        
-    def __str__(self) -> str:
-        return str(self.HeaderData) + "\n" + str(self.XHeaderFields)
-        
-    
-        
-        
-
-
 
 
 

@@ -8,125 +8,94 @@ import whois
 from datetime import datetime
 import os 
 from analysis_template import Reason, Report
-
+from spellchecker import SpellChecker
 
 # NOTE
 # Reason ctor (name: str, val, reason: str, score_incr: int)
 # Report ctor (type: str, who: str) type is what type of analysis was done, who is the entity analyzed
 
-            
-class BodyAnalyzer:
-    def __init__(self, email_body: str) -> None:
-        self.body = email_body
-        self.urls = self.extract_urls(email_body)
-        self.report = {}
-        urgency_words = [
-        "urgent", "immediate", "action", "now", "limited", "offer",
-        "expire", "risk", "danger", "warning", "critical", "alert",
-        "important", "immediately", "confirm", "validate", "require",
-        "deadline", "final", "notice", "threat", "security", "protect",
-        "act", "priority", "attention", "secure", "emergency", "verify",
-        "account", "confidential", "mandatory", "protect", "resolve",
-        "response", "safety", "serious", "solve", "stop", "suspend",
-        "verify", "warning", "without delay", "apply", "available",
-        "avoid", "bonus", "caution", "certify", "chance", "claim",
-        "clearance", "deal", "discount", "do not delay", "exclusive",
-        "expiration", "exposed", "hurry", "instantly", "limited time",
-        "new", "offer ends", "once", "only", "order now", "prevent",
-        "protection", "quick", "report", "rush", "safeguard", "save",
-        "scam", "special", "steal", "subscribe", "today", "top priority",
-        "unauthorized", "unlock", "while supplies last", "win", "within",
-        "breach", "crackdown", "enforcement", "click here", "apply now", "click"
-        "buy now", "call now", "claim now", "click below", "click now",
-        "click to get", "click to remove", "collect now", "contact us",
-        "download now", "enroll now", "find out more", "get it now",
-        ]
-        self.URGNCY_WRDS: set = set(urgency_words)
+class EmailDetails:
+    def __init__(self, email) -> None:
+        self.obj = email
+        self.sender_addr = email.SenderEmailAddress
+        self.subject = email.Subject
+        self.header = email.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x007D001E")
+        self.body = email.Body
+        self.body_info = BodyInfo(self.body)
+        self.auth_results = AuthResults(self.header)
+        self.whois_info = WhoIsInfo(self.sender_addr)
         
-    def score(self):
-        words = self.body.lower().split()
-        return len(self.find_keywords(words))
-    
-    def find_keywords(self, body):
-        return list(lambda wrds: wrds.strip(".,!?:;") in self.URGNCY_WRDS, body)
-    
-    def extract_urls(self, email_body):
-        urls = []
-        soup = BeautifulSoup(email_body, 'html.parser')
-        
-        for link in soup.find_all('a'):
-            href = link.get('href')
-            if not href:
-                continue
-            url = self.parse_safelink(href)
-            urls.append(url)
-        
-        url_pattern = regex.compile(r'https?://\S+')
-        matches = url_pattern.findall(str(soup))
-        for match in matches:
-            url = self.parse_safelink(match)
-            urls.append(url)
-        
-        return list(set(urls))  
     
     
-    def parse_safelink(url):
-        parsed_url = urlparse(url)
-        if 'safelinks.protection.outlook.com' in parsed_url.netloc:
-            query_params = parse_qs(parsed_url.query)
-            original_url = query_params.get('url', [None])[0]
-            if original_url:
-                return unquote(original_url)
-        return url
 
-    def display_urls(self):
-        if not self.urls:
-            print("[ No URLs were found in the email body ]")
-            return
-        pprint(self.urls)
-        
-class AuthResults:
-    def __init__(self, header: str) -> None:
-        self.results = self.parse_authentication_results(header)
-        self.spf = None
-        self.dkim = None
-        self.dmarc = None
-        [setattr(self, key, value) for key, value in self.results.items()]
-        
-    def parse_authentication_results(self, email_header) -> Dict[str, str]:
-        patterns = {
-            'spf': r'spf=(\w+)',
-            'dkim': r'dkim=(\w+)',
-            'dmarc': r'dmarc=(\w+)'
-        }
-        auth_results = {}
-        for key, pattern in patterns.items():
-            match = regex.search(pattern, email_header, regex.IGNORECASE)
-            if not match:
-                continue
-            auth_results[key] = match.group(1)
-        return auth_results
-        
-            
 
-    def __str__(self) -> str:
-        return f"[ AUTHENTICATION RESULTS ]\n SPF: { self.spf } \n DKIM: { self.dkim } \n DMARC: { self.dmarc }"
+class WhoIsInfo:
+    def query_whois(self, domain) -> dict:
+        if not self._can_query(domain):
+            print(f"[!] Cannot query WHOIS data for { domain } as it is not a .com, .org, or .net domain... [!]")
+            return None
+        try:
+            return whois.whois(domain.split("@")[1])
+        except Exception as e:
+            print(f"Failed to fetch WHOIS data: { e }")
+            return None
+    
+    def _can_query(self, domain) -> bool:
+        domain = domain.lower()
+        if domain.endswith(".com") or domain.endswith(".org") or domain.endswith(".net"):
+            return True
+        return False
+    
+    def most_recent(self, dates) -> datetime:
+        if dates is None:
+            return "UNKNOWN"
         
-    def score(self) -> int:
-        score = 0
-        for value in self.results.values():
-            if value != 'pass':
-                score += 5
-        return score
+        if isinstance(dates, list):
+            return dates[0]
         
-class WhoIsAnalyzer:
-    def __init__(self, domain_name: str) -> None:
-        self.domain_name = domain_name
-        self.whois_info = self.query_whois()
+        return dates
+    
+    def set_data(self):
+        self.domain_name = self.whois_info.domain_name
+        self.registrant = self.whois_info.registrant_name
+        self.registrar = self.whois_info.registrar
+        self.creation_date = self.most_recent(self.whois_info.creation_date)
+        self.expiration_date = self.most_recent(self.whois_info.expiration_date)
+        self.set_age()
+    
+    def __init__(self, domain_name):
+        self.whois_info = self.query_whois(domain_name)
         if self.whois_info is None:
-            print(f"[!] Failed to fetch WHOIS data for { self.domain_name }")
+            print(f"[!] Failed to fetch WHOIS data for { domain_name }")
+            self.did_query = False
+        else:
+            self.did_query = True
+            self.set_data()
+    
+    
+    def set_age(self):
+        if not self.creation_date == "UNKNOWN":
+            self.age = (datetime.now() - self.creation_date).days
+        else:
+            self.age = "UNKNOWN"
+    
+    def till_expiration(self):
+        if not self.expiration_date == "UNKNOWN":
+            self.expir_days = (self.expiration_date - datetime.now()).days
+        self.expir_days = "UNKNOWN"
+    
+    
+    def __str__(self) -> whois.str:
+        return f'Domain Name: { self.domain_name }\nRegistrant: { self.registrant }\nRegistrar: { self.registrar }\nCreation Date: { self.creation_date }\nExpiration Date: { self.expiration_date }\nDomain Age: { self.age } days\n'
+
+
+class WhoIsAnalyzer:
+    def __init__(self, data: WhoIsInfo) -> None:
+        if not data.did_query:
+            print("[!] Failed to fetch WHOIS data... [!]")
             return
         
+        self.data = data
         self.MALICIOUS_REGSTRARS = {
             "NameCheap, Inc.": 77,
             "NameSilo, LLC": 88,
@@ -149,22 +118,26 @@ class WhoIsAnalyzer:
             "OnlineNIC, Inc.": 80,
             "Register.com, Inc.": 79
         }
-        self.report = {}
-
-    def query_whois(self) -> Dict[str, Any]:
-        try:
-            return whois.whois(self.domain_name)
-        except Exception as e:
-            print(f"Failed to fetch WHOIS data: { e }")
-            return None
+        self.Report = Report("WHOIS", self.data.domain_name)
     
-    def analyze_domain_names(self):
-        domain_names = self.whois_info.domain_name
-        file_path = r'analysis_data\domain_data.txt'
+    def domain_analysis(self):
+        EXPLAINATION = "The program uses a list of known malicious/comprimised domain names to check if the domain name is present in the list"
+        domain_names = self.data.domain_name
+        if domain_names is None:
+            return Reason("Domain Names", "UNKNOWN", "Failed to get Data", 0)
+        score_incr = self.analyze_domain_names(domain_names)
+        self.Report.add_reason(
+            Reason("Domain Name Analysis", domain_names, EXPLAINATION, score_incr)
+        )
+    
+    def analyze_domain_names(self, domain_names) -> int:
+        if domain_names is None:
+            return 0
         
+        file_path = r'analysis_data\domain_data.txt'
         if not os.path.exists(file_path):
             print("[!] Compromised Domain Name File Data was not found... [!]")
-            return 0
+            return 0    
         
         data = []
         with open(file_path, 'r') as file:
@@ -174,117 +147,216 @@ class WhoIsAnalyzer:
             print("[!] No data was found in the compromised domain name file... [!]")
             return 0
         
-        if not any(name in data for name in domain_names):
-            return 0
-        
-        return 5
-        
-    def get_domain_age(self):
-        if not self.whois_info:
-            return None
-        
-        creation_date = self.whois_info.creation_date
-        
-        if isinstance(creation_date, list):
-            creation_date = creation_date[0]
-       
-        if creation_date:
-            return (datetime.now() - creation_date).days
-        
-        return None
-    
-    def analyze_domain_age(self):
-        age = self.get_domain_age()
-        
-        if age is None or age > 365:
-            return 0
-        
-        if age < 365:
+        if filter(lambda name: name in data, domain_names):
             return 5
         
         return 0
+        
+    def analyze_domain_age(self):
+        age = self.data.age
+        score_incr = 0
+        if not age is None and age != "UNKNOWN" and age < 365:
+            score_incr = 5
+            
+        explain = "Threat actors often use newly registered domains to avoid blacklists and reputation systems. \nOlder domains are more likely to be legitimate."
+        self.Report.add_reason(
+            Reason("Domain Age Analysis", age, explain, score_incr)
+        )
     
     def analyze_expriation_date(self):
-        expiration_date = self.whois_info.expiration_date
-        
-        if isinstance(expiration_date, list):
-            expiration_date = expiration_date[0]
-        
-        if not expiration_date:
-            return 0
-        
-        days = (expiration_date - datetime.now()).days
-       
-        if days < 90:
-            return 10
-
+        EXPLAIN = "Short expiration dates for domain names imply that a domain is fraudlent and are almost always a sign of a scam"
+        days = self.data.expir_days
+        score_incr = 0
+        if days is None or days == "UNKNOWN":
+            score_incr = 0
+        elif days < 90:
+            score_incr = 10
         elif days < 180:
-            return 5
-
+            score_incr = 5
         elif days < 365:
-            return 2
-
+            score_incr = 4
         else:
-            return 0
+            score_incr = 0
+        return self.Report.add_reason(
+            Reason("Domain Expiration Analysis", days, EXPLAIN, score_incr)
+        )
 
     def analyze_registrar(self):
-        registrar = self.whois_info.registrar
+        EXPLAIN = "The program has list of known malicious registrars if the domain name is known to be malicious the field will be >0"
+        registrar = self.data.registrar
+        score_incr = 0  
         if registrar and registrar in self.MALICIOUS_REGSTRARS:
-            percentage = self.MALICIOUS_REGSTRARS[registrar]
-            return (percentage / 100 ) * 2
-        return 0
-    
-    def privacy_protected(self):
-        registrant_name = self.whois_info.registrant_name
-        if registrant_name and "privacy" in registrant_name.lower():
-            return 5
+            score_incr = 5
+        self.Report.add_reason(
+            Reason("Registrar Analysis", registrar, EXPLAIN, score_incr)
+        )    
         
-        return 0
     
+    def is_privacy_protected(self):
+        registrant_name = self.data.registrant
+        score_incr = 0
+        if registrant_name and "privacy" in registrant_name.lower():
+            score_incr = 5
+        EXPLAIN = "Privacy protection is often used by threat actors to hide their identity and avoid detection"
+        self.Report.add_reason(
+            Reason("Privacy Protection Analysis", registrant_name, EXPLAIN, score_incr)
+        )
     
     def generate_report(self):
-        self.report = {
-            "Domain Age Score": self.analyze_domain_age(),
-            "Suspicious Domain Names Score": self.analyze_domain_names(),
-            "Short Expiration Date Score": self.analyze_expriation_date(),
-            "Malicious Registrar": self.analyze_registrar(),
-            "Uses Privacy Protection Score": self.privacy_protected()
+        print("[ Analyzing Domain Name Data... ]")
+        self.domain_analysis()
+        print("[ Analyzing Domain Age... ]")    
+        self.analyze_domain_age()
+        print("[ Analyzing Domain Expiration Date... ]")
+        self.analyze_expriation_date()
+        print("[ Analyzing Registrar... ]")
+        self.analyze_registrar()
+        print("[ Checking Privacy Protection... ]")
+        self.is_privacy_protected()
+        print("[ Analysis & Report Complete ]")
+    
+
+class BodyInfo:
+    def __init__(self, body_text):
+        self.body = body_text
+        self.urls = self.extract_urls(body_text)
+        
+    
+    def extract_urls(self, email_body):
+        urls = []
+        soup = BeautifulSoup(email_body, 'html.parser')
+        
+        for link in soup.find_all('a'):
+            href = link.get('href')
+            if not href:
+                continue
+            url = self.parse_safelink(href)
+            urls.append(url)
+            link.replace_with('[ REMOVED URL ]')
+        
+        clean_body = str(soup)
+        url_pattern = url_pattern = regex.compile(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+')
+        matches = url_pattern.findall(clean_body)
+        
+        for match in matches:
+            url = self.parse_safelink(match)
+            urls.append(url)
+        # update the body so we can it for mispelled words
+        self.body = url_pattern.sub('[ REMOVED URL ]', clean_body)
+        return list(set(urls))
+    
+    def parse_safelink(url):
+        parsed_url = urlparse(url)
+        if not 'safelinks.protection.outlook.com' in parsed_url.netloc:
+            return url    
+        query_params = parse_qs(parsed_url.query)
+        original_url = query_params.get('url', [None])[0]
+        if not original_url:
+            return url
+        return unquote(original_url)
+    
+    def view(self):
+        print(self.body)
+    
+    def view_urls(self):
+        if not self.urls:
+            print("[!] No URLs were found in the email body... [!]")
+            return
+        print("[ URLs Found in Email Body ]")
+        for url in self.urls:
+            print(f'\t[>] { url }\n')
+    
+                
+class BodyAnalyzer:
+    def __init__(self, data: BodyInfo, sender: str, scanURLs: bool) -> None:
+        self.data = data
+        self.report = Report("Body", sender)
+        urgency_words = [
+        "urgent", "immediate", "action", "now", "limited", "offer",
+        "expire", "risk", "danger", "warning", "critical", "alert",
+        "important", "immediately", "confirm", "validate", "require",
+        "deadline", "final", "notice", "threat", "security", "protect",
+        "act", "priority", "attention", "secure", "emergency", "verify",
+        "account", "confidential", "mandatory", "protect", "resolve",
+        "response", "safety", "serious", "solve", "stop", "suspend",
+        "verify", "warning", "without delay", "apply", "available",
+        "avoid", "bonus", "caution", "certify", "chance", "claim",
+        "clearance", "deal", "discount", "do not delay", "exclusive",
+        "expiration", "exposed", "hurry", "instantly", "limited time",
+        "new", "offer ends", "once", "only", "order now", "prevent",
+        "protection", "quick", "report", "rush", "safeguard", "save",
+        "scam", "special", "steal", "subscribe", "today", "top priority",
+        "unauthorized", "unlock", "while supplies last", "win", "within",
+        "breach", "crackdown", "enforcement", "click here", "apply now", "click"
+        "buy now", "call now", "claim now", "click below", "click now",
+        "click to get", "click to remove", "collect now", "contact us",
+        "download now", "enroll now", "find out more", "get it now",
+        ]
+        self.URGNCY_WRDS: set = set(urgency_words)
+        self.find_urgency()
+        self.find_mispelled_words()
+        
+    def find_mispelled_words(self):
+        spell = SpellChecker()
+        words = self.data.body.split()
+        self.misspelled_words = spell.unknown(words)
+    
+    def find_keywords(self, body):
+        return list(lambda wrds: wrds.strip(".,!?:;") in self.URGNCY_WRDS, body)
+        
+    def find_urgency(self):
+        words = self.data.body.lower().split()
+        self.urg_words = self.find_keywords(words)
+    
+    def generate_report(self):
+        EXPLAIN_URG = "Threat actors often use a sense of urgency to provoke fear and panic in their victims. \nThis is a common tactic used in phishing emails to get the victim to act without thinking."
+        EXPLAIN_MIS = "Mispelled words are often used in phishing emails either by accident or to avoid detection by spam filters. \nThey are also used to target victims who may not be as attentive to detail."
+        self.report.add_reason(
+            Reason("Urgency Analysis", self.urg_words, EXPLAIN_URG, len(self.urg_words))
+        )
+        self.report.add_reason(
+            Reason("Mispelled Word Analysis", self.misspelled_words, EXPLAIN_MIS, len(self.misspelled_words))
+        )
+    
+        
+class AuthResults:
+    def __init__(self, header: str) -> None:
+        self.results = self.get_authentication_results(header)
+        self.spf = None
+        self.dkim = None
+        self.dmarc = None
+        [setattr(self, key, value) for key, value in self.results.items()]
+        
+    def get_authentication_results(self, email_header) -> Dict[str, str]:
+        patterns = {
+            'spf': r'spf=(\w+)',
+            'dkim': r'dkim=(\w+)',
+            'dmarc': r'dmarc=(\w+)'
         }
-        return self.report
-    
-    def score(self):
-        if not self.report:
-            self.generate_report()
-        return sum(self.report.values())
-    
-    def rank_score(self):
-        score = self.score()
-        if score > 10:
-            return "High"
+        auth_results = {}
+        for key, pattern in patterns.items():
+            match = regex.search(pattern, email_header, regex.IGNORECASE)
+            
+            if match:
+                auth_results[key] = match.group(1)
+                continue
+            
+            auth_results[key] = "UNKNOWN"
+        return auth_results
         
-        elif score > 5:
-            return "Medium"
+            
+
+    def __str__(self) -> str:
+        return f"[ AUTHENTICATION RESULTS ]\n SPF: { self.spf } \n DKIM: { self.dkim } \n DMARC: { self.dmarc }"
         
-        else:
-            return "Low"
-    
-    def save_report(self):
-        if not self.report:
-            self.generate_report()
-        file_path = r'analysis_data\whois_reports.txt'
-        with open(file_path, 'a') as file:
-            file.write(f"Summary of: { self.domain_name }")
-            file.write(f"Score: { self.score() }\n")
-            file.write(f"Risk Level: {self.rank_score()}")
-            file.write(f"Report: { self.report }")
-    
-    def score_guide(self):
-        return """
-        [ Score Guide ]
-        0 - 5: Low Risk
-        6 - 9: Medium Risk
-        11 - 15: High Risk
-        """
+    def score(self) -> int:
+        score = 0
+        for value in self.results.values():
+            if value != 'pass':
+                score += 5
+        return score
+        
+
     
     
     

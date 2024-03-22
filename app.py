@@ -27,10 +27,10 @@ class UIComponents:
             self.get_client()
 
         elif choice == "[ Paste Email Header ]":
-            pass
+            raise NotImplementedError
 
         elif choice == "[ Help / Tutorial ]":
-            pass
+            raise NotImplementedError
         
         elif choice == "[ Exit Program ]":
             self.main_menu.exit_hndler()
