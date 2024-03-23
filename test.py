@@ -6,7 +6,7 @@ import os
 import re
 from pprint import pprint
 from email.parser import HeaderParser
-    
+import json 
   
 # base class / interface for all header extractors
 class HeaderExtractor:
@@ -86,7 +86,9 @@ class HeaderInfo(HeaderExtractor):
             "From": self.msg_from,
             "Reply-To": self.reply_to
         }
-    def __str__(self) -> whois.str:
+        
+        
+    def __str__(self) -> str:
         return  "\n[ Header Information ]\n" + str(self.view())
 
 
@@ -96,7 +98,7 @@ class AuthResults(HeaderExtractor):
         self.dkim = None
         self.dmarc = None
         self.compauth = None
-        super.__init__(header_str)
+        super().__init__(header_str)
         self.parse_fields()
 
     def parse_fields(self) -> None:
@@ -132,21 +134,27 @@ class AuthResults(HeaderExtractor):
             "Reason": self.reason
         }
 
-
-
 def main():
     client = Client()
     if not client.safe_load():
         return 
     email = client.emails
-    for i in range(10):
+    json_data = []
+    for i in range(5):
         header = email[i].PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x007D001E")
-        info = HeaderInfo(header)
-        x_info = XHeaderInfo(header)
-        auth = AuthResults(header)  
-        print(f"{ info }\n\n { x_info }\n\n{ auth }")
-        input("[ Press Enter to Continue ]")
+        data = [
+         HeaderInfo(header).data(),
+         XHeaderInfo(header).data(),
+         AuthResults(header).data()
+        ]  
+        for k in data:
+            json_data.append(k)
         
+        
+        input("[ Press Enter to Continue ]")
+    with open("sample.json", "w") as file:
+        json.dump(json_data, file, indent=4)
+        print("i throw my hands up in the air sometimes and say ayyyy oooo")
 
     # data = [field for field in sample.splitlines() if field.startswith("X")]
     # pprint(data, indent=4)

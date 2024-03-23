@@ -62,7 +62,6 @@ class DomainDB:
 # testing db func 
 def main() -> None:
     database = DomainDB()
-    domain = 'google.com'
     
     all_true = [
         "0-01x-merchandise.554217.xyz",
@@ -108,7 +107,7 @@ def main() -> None:
         if database.query(val):
             print(f"[ PASS ] - ATTEMPT { i + 1 } / { len(all_true) }")
         else:
-            print(f"data base broke lololol")
+            print(f"fuck you its broken")
     
     database.close()
     
