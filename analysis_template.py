@@ -1,6 +1,7 @@
 
 
 
+
 class Reason:
     def __init__(self, name: str, val, reason: str, score_incr: int) -> None:
         self.field_name = name
@@ -16,10 +17,10 @@ class Reason:
             self.score_amm = 0
             self.risk_level = "Low"
             return True
-        else:
-            self.reason = rzn
-            return False
-            
+         
+        self.reason = rzn
+        return False
+        
     
     def detr_risk(self):
         if self.score_amm <= 1:

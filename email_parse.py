@@ -340,7 +340,6 @@ class AuthResults:
             if match:
                 auth_results[key] = match.group(1)
                 continue
-            
             auth_results[key] = "UNKNOWN"
         return auth_results
         

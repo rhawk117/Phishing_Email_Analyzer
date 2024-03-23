@@ -86,7 +86,9 @@ class HeaderInfo(HeaderExtractor):
             "From": self.msg_from,
             "Reply-To": self.reply_to
         }
-    def __str__(self) -> whois.str:
+        
+        
+    def __str__(self) -> str:
         return  "\n[ Header Information ]\n" + str(self.view())
 
 
@@ -131,6 +133,14 @@ class AuthResults(HeaderExtractor):
             "CompAuth": self.compauth,
             "Reason": self.reason
         }
+
+# Container for previous classes, java moment 
+class EmailData:
+    def __init(self, header_str: str) -> None:
+        self.x_headers = XHeaderInfo(header_str)
+        self.headers = HeaderInfo(header_str)
+        self.auth_results = AuthResults(header_str)
+        
 
 
 

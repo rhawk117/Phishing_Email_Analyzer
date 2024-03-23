@@ -1,5 +1,4 @@
 from client_manager import Client
-from email_parse import Email, DetailedEmail
 from questionary import Choice, prompt
 import sys
 from time import sleep
@@ -41,7 +40,7 @@ class MainMenu(MenuUI):
         
 ***********************************************************************
     
-    """
+"""
     def __init__(self) -> None:
         CHOICES = [
             "[ Load Outlook Inbox ]",
@@ -64,6 +63,14 @@ class MainMenu(MenuUI):
     def help_text(self, text: str) -> None:
         print(f'[i] { text } [i]')
         sleep(5)
+
+class FolderMenu(MenuUI):
+    def __init__(self, folder_map: dict) -> None:
+        self.choices = [Choice(title=f"[ { folder } ]", value=folder) for folder in folder_map.keys()]
+        self.prompt = "[ Select a Folder from Outlook to Analyze ]"
+        super().__init__(self.prompt, self.choices)
+
+
 
 class EmailMenu(MenuUI):
     def __init__(self, emails: list):
@@ -101,8 +108,8 @@ class EmailMenu(MenuUI):
     def map_options(self, page_emails: list):
         self.choices = [Choice(title=self.menu_view(email), value=email) for email in page_emails]
 
-    def menu_view(self, email: Email):
-        return f"[ {email.Subject} ]\t ( {email.SenderEmailAddress} )"
+    def menu_view(self, email):
+        return f"[ Subject: { email.Subject } | From: { email.SenderEmailAddress } ]"
         
 
     def _pager(self, choice):
@@ -148,6 +155,7 @@ class EmailViewer(MenuUI):
         )
         self.email = email_obj
         
+        
 class Views:
     def __init__(self) -> None:
         CHOICES = [
@@ -162,25 +170,12 @@ class Views:
             CHOICES
         )
         
-class ReportCreator:
-    def __init__(self, Report) -> None:
-        self.report = Report
-        CHOICES = [
-            "[ Create Short Report]",
-            "[ Create Detailed Report]",
-            "[ Export Report]",
-            "[ Go Back ]"
-        ]
-    def handler(self, choice):
-        pass
+
         
 
 
 
         
-    
-
-
     
 
 def testMainMenu():
@@ -211,8 +206,16 @@ NOTE
 '''
 def main() -> None:
     # testMainMenu()
-    testEmailMenu()
-    
+    # testEmailMenu()
+    client = Client()
+    if not client.safe_load():
+        print("[!] Failed to load client... [!]")
+        sys.exit()
+    folder_menu = FolderMenu(client.clientFolders)
+    choice = folder_menu.run()
+    folder_contents = client.get_folder_emails(choice)
+    email_selection = EmailMenu(folder_contents)
+    email = email_selection.run()
     
 
 

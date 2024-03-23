@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 
 
@@ -24,8 +23,8 @@ class X_MS_AntiSpam_MailboxDelivery:
 
 
 # sample 
-# CIP:5.61.117.83; => "Connecting IP Address"
-# CTRY:IE; => "Country"
+# CIP:5.61.117.83; => "Connecting IP Address" - use to determine if the IP is blacklisted (yay more work)
+# CTRY:IE; => "Country" use to determine from a list of countries to blacklist i suppose
 # LANG:en;
 # SCL:-1; => "Spam Confidence Level"
 
@@ -35,8 +34,6 @@ class MS_AntiSpam_Report:
     ctry: str
     ipv: str
     raw: dict
-    
-
 
 @staticmethod
 class XSplicer:

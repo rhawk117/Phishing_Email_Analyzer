@@ -59,9 +59,12 @@ class UIComponents:
     
     def render_emailViewer(self, email_to_load):
         pass
-            
-            
-        
+
+# generic base class containing all the data and methods needed for the UI for paste & load client
+class UIBackend:
+    def __init__(self):
+        self.domain_db = DomainDB()
+    
         
         
 
