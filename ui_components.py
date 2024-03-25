@@ -2,8 +2,8 @@ from client_manager import Client
 from questionary import Choice, prompt
 import sys
 from time import sleep
-
-
+from analysis.header_parser import header_parser
+from email.parser import HeaderParser
 
 class MenuUI:
     def __init__(self, prompt: str, choices:list) -> None:
@@ -66,8 +66,8 @@ class MainMenu(MenuUI):
 
 class FolderMenu(MenuUI):
     def __init__(self, folder_map: dict) -> None:
-        self.choices = [Choice(title=f"[ { folder } ]", value=folder) for folder in folder_map.keys()]
-        self.prompt = "[ Select a Folder from Outlook to Analyze ]"
+        self.choices = [Choice(title=f"[ { name } ]", value=val) for name, val in folder_map.items()]
+        self.prompt = "[ Select a Folder from Outlook to Open ]"
         super().__init__(self.prompt, self.choices)
 
 
@@ -78,7 +78,7 @@ class EmailMenu(MenuUI):
         self.page_size: int = 10
         self.num_pages: int = (len(emails)) // self.page_size
         
-        self.prompt: str = f'Select an Email From your Inbox (Page {self.current_page + 1}/{self.num_pages})'
+        self.prompt: str = f'Select an Email From your Inbox (Page { self.current_page + 1 }/{ self.num_pages })'
         self.emails: list = emails
         self.choices: list = []
     
@@ -89,7 +89,7 @@ class EmailMenu(MenuUI):
         if self.current_page < self.num_pages:
             self.choices.append(Choice(title="Next Page", value="next"))
             
-        self.choices.append(Choice(title="Return to Main Menu", value="main_menu"))
+        self.choices.append(Choice(title="Return to Selection", value="folder"))
 
     def _render_page(self):
         ''''
@@ -99,6 +99,7 @@ class EmailMenu(MenuUI):
 
         start_index = self.current_page * self.page_size
         end_index = min(start_index + self.page_size, len(self.emails))
+        
         # COM Objecs are read only, can't slice a list with them
         page_emails = [self.emails[i] for i in range(start_index, end_index)]
         self.map_options(page_emails)
@@ -142,7 +143,7 @@ class EmailMenu(MenuUI):
 class EmailViewer(MenuUI):
     def __init__(self, email_obj) -> None:
         CHOICES = [
-            Choice(title="[ View Contents ]",  value="views"),
+            Choice(title="[ View ]",  value="views"),
             Choice(title="[ Analyze Body ]",  value="urls"),
             Choice(title="[ Analyze Header ]", value="header"),
             Choice(title="[ Analyze Domain ]",  value="whois"),
@@ -160,7 +161,7 @@ class Views:
     def __init__(self) -> None:
         CHOICES = [
             Choice(title="[ View Header ]", value="header"),
-            Choice(title="[ View Body ]", value="body"),
+            Choice(title="[ View Email Body ]", value="body"),
             Choice(title="[ View WhoIs ]", value="whois"),
             Choice(title="[ View Email Contents ]", value="content"),
             Choice(title="[ Go Back ]", value="back")
@@ -211,12 +212,11 @@ def main() -> None:
     if not client.safe_load():
         print("[!] Failed to load client... [!]")
         sys.exit()
-    folder_menu = FolderMenu(client.clientFolders)
-    choice = folder_menu.run()
-    folder_contents = client.get_folder_emails(choice)
-    email_selection = EmailMenu(folder_contents)
-    email = email_selection.run()
-    
+    inbox = client.inboxContents
+    for i in inbox:
+        header =  i.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x007D001E")       
+        parser = HeaderParser().parsestr(header)
+        print(parser)
 
 
 if __name__ == "__main__":

@@ -1,40 +1,32 @@
 
+from dataclasses import dataclass
 
-
-
+@dataclass
 class Reason:
-    def __init__(self, name: str, val, reason: str, score_incr: int) -> None:
-        self.field_name = name
-        self.field_value = val
-        if self.none_reason(reason):
-            return
-        self.score_amm: int = score_incr
-        self.detr_risk()
-    
-    def none_reason(self, rzn):
-        if self.field_value is None:
-            self.reason = f"ERROR: Failed to get Data for { self.field_name }"
-            self.score_amm = 0
-            self.risk_level = "Low"
-            return True
-         
-        self.reason = rzn
-        return False
+    title: str
+    explain: str
+    risk_level: str
+    value: str
+
+    def score_risk(self):    
+        if self.risk_level == "N/A":
+            return 0
         
-    
-    def detr_risk(self):
-        if self.score_amm <= 1:
-            self.risk_level = "Low"
-
-        elif self.score_amm <= 3:
-            self.risk_level = "Medium"
-
+        elif self.risk_level == "Low":
+            return 1
+        
+        elif self.risk_level == "Medium":
+            return 2
+        
         else:
-            self.risk_level = "High"
-    
-    def __str__(self) -> str:
-        return f"{ self.field_name } - { self.field_value }\n[+] Score Increase: {self.score_amm}\n[>] Reason: { self.reason }\n[!] Risk Level: { self.risk_level }\n"
+            return 3
         
+        
+    def __str__(self) -> str:
+        return f"[i] { self.name } [ { self.risk_level } ]\n{ self.explain }"
+
+
+  
 
 class Report:
     def __init__(self, type: str, who: str) -> None:

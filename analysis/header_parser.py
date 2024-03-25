@@ -6,7 +6,7 @@ import os
 import re
 from pprint import pprint
 from email.parser import HeaderParser
-
+from xheader_data import XSplicer, AntiSpamMailboxDelivery, MS_AntiSpam_Report
 
 
 class HeaderExtractor:
@@ -46,29 +46,41 @@ class XHeaderInfo(HeaderExtractor):
     def __init__(self, header_str: str) -> None:
         super().__init__(header_str)
     
-    def parse_fields(self) -> None:
-        self.x_mailer = self.fetch("X-Mailer")
-        self.forefront_antispam_report = self.fetch("X-Forefront-Antispam-Report")
+    def parse_fields(self) -> None:        
         self.ms_exchange_org_scl = self.fetch("X-MS-Exchange-Organization-SCL")
         self.ms_anti_spam = self.fetch("X-Microsoft-Antispam")
-        self.ms_antispam_mailbox_delivery = self.fetch("X-Microsoft-Antispam-Mailbox-Delivery")
-        self.ms_atp_properties = self.fetch("X-MS-Exchange-AtpMessageProperties")
-        self.ms_auth_source = self.fetch("X-MS-Exchange-Organization-AuthSource")
-        self.ms_auth_as = self.fetch("X-MS-Exchange-Organization-AuthAs")
+        
+        # X-Microsoft-Antispam-Mailbox-Delivery, X-Forefront-Antispam-Report
+        self.set_spam_fields() 
+        
+        self.auth_as = self.fetch("X-MS-Exchange-Organization-AuthAs")
+    
+    def set_spam_fields(self):
+        self.anti_spam_report = XSplicer.splice_spam_report(
+            self.fetch("X-Forefront-Antispam-Report")
+        )
+        
+        self.anti_spam_mbox = XSplicer.splice_antispam_delievery(
+            self.fetch("X-Microsoft-Antispam-Mailbox-Delivery")
+        )    
+    
     
     def data(self) -> dict:
         return {
-            "X-Mailer": self.x_mailer,
-            "X-Forefront-Antispam-Report": self.forefront_antispam_report,
+            "X-Forefront-Antispam-Report": self.anti_spam_report,
             "X-MS-Exchange-Organization-SCL": self.ms_exchange_org_scl,
             "X-Microsoft-Antispam": self.ms_anti_spam,
-            "X-Microsoft-Antispam-Mailbox-Delivery": self.ms_antispam_mailbox_delivery,
-            "X-MS-Exchange-AtpMessageProperties": self.ms_atp_properties,
-            "X-MS-Exchange-Organization-AuthSource": self.ms_auth_source,
-            "X-MS-Exchange-Organization-AuthAs": self.ms_auth_as
+            "X-Microsoft-Antispam-Mailbox-Delivery": self.anti_spam_mb,
+            "X-MS-Exchange-Organization-AuthAs": self.auth_as
         }
     def __str__(self) -> str:
-        return "[ X-Header Information ]\n" + str(self.view())
+        return "[ X-Header Information ]\n" + \
+                f"X-Forefront-Antispam-Report: {self.anti_spam_report}\n" + \
+                f"X-MS-Exchange-Organization-SCL: {self.ms_exchange_org_scl}\n" + \
+                f"X-Microsoft-Antispam: {self.ms_anti_spam}\n" + \
+                f"X-Microsoft-Antispam-Mailbox-Delivery: {self.anti_spam_mbox}\n" + \
+                f"X-MS-Exchange-Organization-AuthAs: {self.auth_as}\n" \
+                
     
     
 class HeaderInfo(HeaderExtractor):
@@ -89,7 +101,7 @@ class HeaderInfo(HeaderExtractor):
         
         
     def __str__(self) -> str:
-        return  "\n[ Header Information ]\n" + str(self.view())
+        return  f"\n[ Header Information ]\n Return-Path: {self.return_path}\n From: {self.msg_from}\n Reply-To: {self.reply_to}\n" 
 
 
 class AuthResults(HeaderExtractor):
@@ -104,13 +116,12 @@ class AuthResults(HeaderExtractor):
     def parse_fields(self) -> None:
         self.parse_auth_results()
     
-    def parse_auth_results(self):
+    def parse_auth_results(self) -> None:
         patterns = {
             'spf': r'spf=(\w+)',
             'dkim': r'dkim=(\w+)',
             'dmarc': r'dmarc=(\w+)',
             'compauth': r'compauth=(\w+)',
-            'reason': r'reason=(\w+)'
         }
         
         auth_results = self.fetch("Authentication-Results")
@@ -127,14 +138,16 @@ class AuthResults(HeaderExtractor):
                 
     def data(self) -> dict:
         return {
-            "Spf": self.spf,
-            "Dkim": self.dkim,
-            "Dmarc": self.dmarc,
-            "CompAuth": self.compauth,
-            "Reason": self.reason
+            "spf": self.spf,
+            "dkim": self.dkim,
+            "dmarc": self.dmarc,
+            "compauth": self.compauth,            
         }
+    
+    def __str__(self) -> str:
+        return f"\n[ Authentication Results ]\n SPF: {self.spf}\n DKIM: {self.dkim}\n DMARC: {self.dmarc}\n CompAuth: {self.compauth}\n"
 
-# Container for previous classes, java moment 
+
 class EmailData:
     def __init(self, header_str: str) -> None:
         self.x_headers = XHeaderInfo(header_str)
@@ -146,7 +159,17 @@ class EmailData:
 
 
 def main() -> None:
-    pass
+    client = Client()
+    if not client.safe_load():
+        print("[!] Failed to load client... [!]")
+        return 
+    emails = client.get_folder_emails("Inbox")
+    email = emails[0]
+    header = email.Header
+    email_data = EmailData(header)
+    email_data.x_headers.display()
+    email_data.headers.display()
+    email_data.auth_results.display()
 
 if __name__ == "__main__":
     main()    

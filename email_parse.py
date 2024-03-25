@@ -7,7 +7,7 @@ from typing import Dict, List
 import whois
 from datetime import datetime
 import os 
-from analysis_template import Reason, Report
+from Phishing_Email_Analyzer.analysis.analysis_template import Reason, Report
 from spellchecker import SpellChecker
 
 # NOTE
@@ -22,7 +22,6 @@ class EmailDetails:
         self.header = email.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x007D001E")
         self.body = email.Body
         self.body_info = BodyInfo(self.body)
-        self.auth_results = AuthResults(self.header)
         self.whois_info = WhoIsInfo(self.sender_addr)
         
     

@@ -24,15 +24,19 @@ class DomainDB:
     def _fetch_data(self):
         response = requests.get(URL)
         return response.text.split('\n')
+    
     @property
     def size(self) -> int:
-        self.cursor.execute("SELECT COUNT(*) FROM malicious_domains")
+        self.cursor.execute(
+            "SELECT COUNT(*) FROM malicious_domains"
+        )
         return self.cursor.fetchone()[0]
         
     
     def initialize(self):
-        self.cursor.execute('''CREATE TABLE IF NOT EXISTS malicious_domains
-                          (domain TEXT PRIMARY KEY)''')
+        self.cursor.execute(
+            "CREATE TABLE IF NOT EXISTS malicious_domains (domain TEXT PRIMARY KEY)"
+        )
         self.connect.commit()
         
         
@@ -46,16 +50,25 @@ class DomainDB:
             return 
         
         for domain in db_data:
-            self.cursor.execute("INSERT OR IGNORE INTO malicious_domains (domain) VALUES (?)", (domain,))
+            self.cursor.execute(
+                "INSERT OR IGNORE INTO malicious_domains (domain) VALUES (?)", 
+                (domain,)
+            )
         self.connect.commit()
 
     def query(self, domain) -> bool:
-        self.cursor.execute("SELECT EXISTS(SELECT 1 FROM malicious_domains WHERE domain = ?)", (domain,))
+        self.cursor.execute(
+            "SELECT EXISTS(SELECT 1 FROM malicious_domains WHERE domain = ?)",
+            (domain,)
+        )
         result = self.cursor.fetchone()[0]
         return bool(result)
     
     def add(self, domain):
-        self.cursor.execute("INSERT OR IGNORE INTO malicious_domains (domain) VALUES (?)", (domain,))
+        self.cursor.execute(
+            "INSERT OR IGNORE INTO malicious_domains (domain) VALUES (?)", 
+            (domain,)
+        )
         self.connect.commit()
     
     def close(self):
