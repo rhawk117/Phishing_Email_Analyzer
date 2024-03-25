@@ -2,8 +2,9 @@ from client_manager import Client
 from questionary import Choice, prompt
 import sys
 from time import sleep
-from analysis.header_parser import header_parser
-from email.parser import HeaderParser
+import analysis
+
+
 
 class MenuUI:
     def __init__(self, prompt: str, choices:list) -> None:
@@ -209,6 +210,8 @@ def main() -> None:
     # testMainMenu()
     # testEmailMenu()
     client = Client()
+    from email.parser import HeaderParser
+    from email.utils import parseaddr
     if not client.safe_load():
         print("[!] Failed to load client... [!]")
         sys.exit()
@@ -216,8 +219,12 @@ def main() -> None:
     for i in inbox:
         header =  i.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x007D001E")       
         parser = HeaderParser().parsestr(header)
-        print(parser)
-
+        return_p = parser.get('Return-Path')
+        if "bounces" in return_p or "*" in return_p:
+            print(f"Return Path: {return_p.split("@")[1]}")
+        else:
+            print(f"Return Path: {return_p}")
+        input()
 
 if __name__ == "__main__":
     main()

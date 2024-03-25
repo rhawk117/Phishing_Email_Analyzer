@@ -2,41 +2,38 @@ from typing import Any
 from bs4 import BeautifulSoup
 import re as regex
 from urllib.parse import urlparse, parse_qs, unquote
-from pprint import pprint
-from typing import Dict, List
 import whois
 from datetime import datetime
 import os 
-from Phishing_Email_Analyzer.analysis.analysis_template import Reason, Report
+from analysis_template import Reason, Report
 from spellchecker import SpellChecker
-
+from domain_checker import DomainDB
 # NOTE
-# Reason ctor (name: str, val, reason: str, score_incr: int)
+# Reason ctor (name: str, val, reason: str, risk: int)
 # Report ctor (type: str, who: str) type is what type of analysis was done, who is the entity analyzed
 
-class EmailDetails:
-    def __init__(self, email) -> None:
-        self.obj = email
-        self.sender_addr = email.SenderEmailAddress
-        self.subject = email.Subject
-        self.header = email.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x007D001E")
-        self.body = email.Body
-        self.body_info = BodyInfo(self.body)
-        self.whois_info = WhoIsInfo(self.sender_addr)
+
         
-    
-    
 
 
 class WhoIsInfo:
+    def __init__(self, domain_name):
+        self.whois_info = self.query_whois(domain_name)
+        if self.whois_info is None:
+            print(f"[!] Failed to fetch WHOIS whois_data for { domain_name }")
+            self.did_query = False
+        else:
+            self.did_query = True
+            self.set_data()
+    
     def query_whois(self, domain) -> dict:
         if not self._can_query(domain):
-            print(f"[!] Cannot query WHOIS data for { domain } as it is not a .com, .org, or .net domain... [!]")
+            print(f"[!] Cannot query WHOIS whois_data for { domain } as it is not a .com, .org, or .net domain... [!]")
             return None
         try:
             return whois.whois(domain.split("@")[1])
         except Exception as e:
-            print(f"Failed to fetch WHOIS data: { e }")
+            print(f"Failed to fetch WHOIS whois_data: { e }")
             return None
     
     def _can_query(self, domain) -> bool:
@@ -47,7 +44,7 @@ class WhoIsInfo:
     
     def most_recent(self, dates) -> datetime:
         if dates is None:
-            return "UNKNOWN"
+            return "Not Found"
         
         if isinstance(dates, list):
             return dates[0]
@@ -62,26 +59,19 @@ class WhoIsInfo:
         self.expiration_date = self.most_recent(self.whois_info.expiration_date)
         self.set_age()
     
-    def __init__(self, domain_name):
-        self.whois_info = self.query_whois(domain_name)
-        if self.whois_info is None:
-            print(f"[!] Failed to fetch WHOIS data for { domain_name }")
-            self.did_query = False
-        else:
-            self.did_query = True
-            self.set_data()
     
     
     def set_age(self):
-        if not self.creation_date == "UNKNOWN":
+        if not self.creation_date == "Not Found":
             self.age = (datetime.now() - self.creation_date).days
         else:
-            self.age = "UNKNOWN"
+            self.age = "Not Found"
     
     def till_expiration(self):
-        if not self.expiration_date == "UNKNOWN":
+        if not self.expiration_date == "Not Found":
             self.expir_days = (self.expiration_date - datetime.now()).days
-        self.expir_days = "UNKNOWN"
+        else:
+            self.expir_days = "Not Found"
     
     
     def __str__(self) -> whois.str:
@@ -89,13 +79,67 @@ class WhoIsInfo:
 
 
 class WhoIsAnalyzer:
-    def __init__(self, data: WhoIsInfo) -> None:
-        if not data.did_query:
-            print("[!] Failed to fetch WHOIS data... [!]")
-            return
+    
+    @staticmethod
+    def analyze(whois_data: WhoIsInfo) -> Report:
+        if not whois_data.did_query:
+            return None
+        report = Report(f"WhoIs Report of { whois_data.domain_name }")
+        WhoIsAnalyzer.domain_analysis(report, whois_data)
+        WhoIsAnalyzer.analyze_domain_age(report, whois_data)
+        WhoIsAnalyzer.analyze_expriation_date(report, whois_data)
+        WhoIsAnalyzer.analyze_registrar(report, whois_data)
+        WhoIsAnalyzer.is_privacy_protected(report, whois_data)
+        return report
+    
+    @staticmethod
+    def domain_analysis(report: Report, whois_data: WhoIsInfo):
+        EXPLAINATION = "The program uses a list of known malicious/comprimised domain names to check if the domain name is present in the list"
+        domain_names = whois_data.domain_name
+        if domain_names is None:
+            report.add_reason(Reason("Domain Name Blacklist Check", EXPLAINATION, "N/A", domain_names))
+            
+        domain_db = DomainDB()
+        for domains in domain_names:
+            if domain_db.query(domains):
+                report.add_reason(
+                    Reason("Domain Name Blacklist Check", EXPLAINATION, "High", domains)
+                )
+                
+    @staticmethod
+    def analyze_domain_age(report: Report, whois_data: WhoIsInfo):
+        age = whois_data.age
+        EXPLAIN = "Threat actors often use newly registered domains to avoid blacklists and reputation systems. \nOlder domains are more likely to be legitimate."
+        if not age is None or age == "Not Found":
+            report.add_reason(
+                Reason("Domain Age Analysis", EXPLAIN, "N/A", age)
+            )
+        elif age > 365:
+            report.add_reason(
+                Reason("Domain Age Analysis", EXPLAIN, "N/A", age)
+            )
+        else:
+            report.add_reason(
+                Reason("Domain Age Analysis", EXPLAIN, "High", age)
+            )
         
-        self.data = data
-        self.MALICIOUS_REGSTRARS = {
+    @staticmethod
+    def analyze_expriation_date(report: Report, whois_data: WhoIsInfo):
+        EXPLAIN = "Short expiration dates for domain names imply that a domain is fraudlent and are almost always a sign of a scam"
+        days = whois_data.expir_days
+        risk = "High"
+        if days is None or days == "Not Found" or days > 365:
+            risk = "N/A"
+        report.add_reason(
+                Reason("Domain Expiration Date Analysis", EXPLAIN, risk, days)
+            )
+        
+    @staticmethod
+    def analyze_registrar(report: Report, whois_data: WhoIsInfo):
+        EXPLAIN = "The program has list of known malicious registrars if the domain name is known to be malicious the field will be >0"
+        registrar = whois_data.registrar
+        risk = "N/A"
+        MALICIOUS_REGSTRARS = {
             "NameCheap, Inc.": 77,
             "NameSilo, LLC": 88,
             "GoDaddy.com, LLC": 40,
@@ -117,111 +161,33 @@ class WhoIsAnalyzer:
             "OnlineNIC, Inc.": 80,
             "Register.com, Inc.": 79
         }
-        self.Report = Report("WHOIS", self.data.domain_name)
-    
-    def domain_analysis(self):
-        EXPLAINATION = "The program uses a list of known malicious/comprimised domain names to check if the domain name is present in the list"
-        domain_names = self.data.domain_name
-        if domain_names is None:
-            return Reason("Domain Names", "UNKNOWN", "Failed to get Data", 0)
-        score_incr = self.analyze_domain_names(domain_names)
-        self.Report.add_reason(
-            Reason("Domain Name Analysis", domain_names, EXPLAINATION, score_incr)
-        )
-    
-    def analyze_domain_names(self, domain_names) -> int:
-        if domain_names is None:
-            return 0
-        
-        file_path = r'analysis_data\domain_data.txt'
-        if not os.path.exists(file_path):
-            print("[!] Compromised Domain Name File Data was not found... [!]")
-            return 0    
-        
-        data = []
-        with open(file_path, 'r') as file:
-            data = file.read().splitlines()
-        
-        if not data:
-            print("[!] No data was found in the compromised domain name file... [!]")
-            return 0
-        
-        if filter(lambda name: name in data, domain_names):
-            return 5
-        
-        return 0
-        
-    def analyze_domain_age(self):
-        age = self.data.age
-        score_incr = 0
-        if not age is None and age != "UNKNOWN" and age < 365:
-            score_incr = 5
-            
-        explain = "Threat actors often use newly registered domains to avoid blacklists and reputation systems. \nOlder domains are more likely to be legitimate."
-        self.Report.add_reason(
-            Reason("Domain Age Analysis", age, explain, score_incr)
-        )
-    
-    def analyze_expriation_date(self):
-        EXPLAIN = "Short expiration dates for domain names imply that a domain is fraudlent and are almost always a sign of a scam"
-        days = self.data.expir_days
-        score_incr = 0
-        if days is None or days == "UNKNOWN":
-            score_incr = 0
-        elif days < 90:
-            score_incr = 10
-        elif days < 180:
-            score_incr = 5
-        elif days < 365:
-            score_incr = 4
-        else:
-            score_incr = 0
-        return self.Report.add_reason(
-            Reason("Domain Expiration Analysis", days, EXPLAIN, score_incr)
-        )
-
-    def analyze_registrar(self):
-        EXPLAIN = "The program has list of known malicious registrars if the domain name is known to be malicious the field will be >0"
-        registrar = self.data.registrar
-        score_incr = 0  
-        if registrar and registrar in self.MALICIOUS_REGSTRARS:
-            score_incr = 5
-        self.Report.add_reason(
-            Reason("Registrar Analysis", registrar, EXPLAIN, score_incr)
+        if registrar and registrar in MALICIOUS_REGSTRARS:
+            risk = "High"
+        report.add_reason(
+            Reason("Registrar Analysis", EXPLAIN, risk, registrar)
         )    
         
-    
-    def is_privacy_protected(self):
-        registrant_name = self.data.registrant
-        score_incr = 0
-        if registrant_name and "privacy" in registrant_name.lower():
-            score_incr = 5
+    @staticmethod
+    def is_privacy_protected(report: Report, whois_data: WhoIsInfo):
+        registrant_name = whois_data.registrant
+        risk = "N/A"
         EXPLAIN = "Privacy protection is often used by threat actors to hide their identity and avoid detection"
-        self.Report.add_reason(
-            Reason("Privacy Protection Analysis", registrant_name, EXPLAIN, score_incr)
+        if registrant_name and "privacy" in registrant_name.lower():
+            risk = "Medium" 
+        report.add_reason(
+            Reason("Privacy Protection Analysis",EXPLAIN, risk, registrant_name)
         )
     
-    def generate_report(self):
-        print("[ Analyzing Domain Name Data... ]")
-        self.domain_analysis()
-        print("[ Analyzing Domain Age... ]")    
-        self.analyze_domain_age()
-        print("[ Analyzing Domain Expiration Date... ]")
-        self.analyze_expriation_date()
-        print("[ Analyzing Registrar... ]")
-        self.analyze_registrar()
-        print("[ Checking Privacy Protection... ]")
-        self.is_privacy_protected()
-        print("[ Analysis & Report Complete ]")
     
 
 class BodyInfo:
-    def __init__(self, body_text):
-        self.body = body_text
-        self.urls = self.extract_urls(body_text)
+    def __init__(self, email):
+        self.email = email
+        self.body = email.Body
+        self.urls = self.extract_urls(self.body)
         
     
-    def extract_urls(self, email_body):
+    def extract_urls(self, email_body) -> list:
         urls = []
         soup = BeautifulSoup(email_body, 'html.parser')
         
@@ -234,17 +200,18 @@ class BodyInfo:
             link.replace_with('[ REMOVED URL ]')
         
         clean_body = str(soup)
-        url_pattern = url_pattern = regex.compile(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+')
+        url_pattern = regex.compile(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+')
         matches = url_pattern.findall(clean_body)
         
         for match in matches:
             url = self.parse_safelink(match)
             urls.append(url)
-        # update the body so we can it for mispelled words
+            
+        # update the body so we can search it for mispelled words
         self.body = url_pattern.sub('[ REMOVED URL ]', clean_body)
         return list(set(urls))
     
-    def parse_safelink(url):
+    def parse_safelink(url) -> str:
         parsed_url = urlparse(url)
         if not 'safelinks.protection.outlook.com' in parsed_url.netloc:
             return url    
@@ -254,8 +221,11 @@ class BodyInfo:
             return url
         return unquote(original_url)
     
-    def view(self):
-        print(self.body)
+    def view_body(self):
+        print(f"Subject: { self.email.Subject }")
+        print(f"From: { self.email.SenderName } ({ self.email.SenderEmailAddress })")
+        print(f"Date: { self.email.ReceivedTime }")
+        print(f"{'*' * 60}\n{ self.body } \n{'*' * 60}")
     
     def view_urls(self):
         if not self.urls:
@@ -267,8 +237,8 @@ class BodyInfo:
     
                 
 class BodyAnalyzer:
-    def __init__(self, data: BodyInfo, sender: str, scanURLs: bool) -> None:
-        self.data = data
+    def __init__(self, whois_data: BodyInfo, sender: str) -> None:
+        self.whois_data = whois_data
         self.report = Report("Body", sender)
         urgency_words = [
         "urgent", "immediate", "action", "now", "limited", "offer",
@@ -297,14 +267,14 @@ class BodyAnalyzer:
         
     def find_mispelled_words(self):
         spell = SpellChecker()
-        words = self.data.body.split()
+        words = self.whois_data.body.split()
         self.misspelled_words = spell.unknown(words)
     
     def find_keywords(self, body):
         return list(lambda wrds: wrds.strip(".,!?:;") in self.URGNCY_WRDS, body)
         
     def find_urgency(self):
-        words = self.data.body.lower().split()
+        words = self.whois_data.body.lower().split()
         self.urg_words = self.find_keywords(words)
     
     def generate_report(self):
@@ -326,7 +296,7 @@ class AuthResults:
         self.dmarc = None
         [setattr(self, key, value) for key, value in self.results.items()]
         
-    def get_authentication_results(self, email_header) -> Dict[str, str]:
+    def get_authentication_results(self, email_header) -> dict:
         patterns = {
             'spf': r'spf=(\w+)',
             'dkim': r'dkim=(\w+)',
@@ -339,7 +309,7 @@ class AuthResults:
             if match:
                 auth_results[key] = match.group(1)
                 continue
-            auth_results[key] = "UNKNOWN"
+            auth_results[key] = "Not Found"
         return auth_results
         
             

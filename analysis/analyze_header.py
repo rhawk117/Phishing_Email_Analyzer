@@ -4,6 +4,51 @@ from analysis_template import Reason, Report
 
 NOT_FOUND = "The parser failed to fetch results for this field or it was not included in the email header"
 
+
+class AnalyzeMaster:
+    
+    @staticmethod
+    def analyze_auth_results(self, auth_results: AuthResults):
+        SPF_FAILED = "SPF or Sender Policy Framework is an email authentication method that detects forged sender addresses during the delivery of the email. If the SPF check fails, it means the email is not from the domain it claims to be from. This is a common technique used by phishers to trick users into thinking the email is from a legitimate source."
+        DKIM_FAILED = "DKIM or DomainKeys Identified Mail is an email authentication method that verifies the authenticity of the email. If the DKIM check fails, it means the email has been tampered with or is not from the domain it claims to be from. This is a common technique used by phishers to trick users into thinking the email is from a legitimate source."
+        DMARC_FAILED = "DMARC or Domain-based Message Authentication, Reporting, and Conformance is an email authentication method that helps prevent email spoofing. If the DMARC check fails, it means the email is not from the domain it claims to be from. This is a common technique used by phishers to trick users into thinking the email is from a legitimate source."
+        COMP_AUTH_FAILED = "CompAuth or Composite Authentication is an email authentication method that combines multiple authentication methods to verify the authenticity of the email. If the COMP_AUTH check fails, it means the email is not from the domain it claims to be from. This is a common indicator of a phishing email and is a technique used by phishers to trick users into thinking the email is from a legitimate source."
+        report = Report("Authentication Results")
+        data_set = auth_results.data()
+        explain = {
+            "spf": SPF_FAILED,
+            "dkim": DKIM_FAILED,
+            "dmarc": DMARC_FAILED,
+            "compauth": COMP_AUTH_FAILED
+        }
+        for key, value in data_set.items():
+            if value == "Not Found":
+                report.add_reason(Reason(key, NOT_FOUND, "N/A", value))
+            elif value.lower() == "pass":
+                continue
+            else:
+                report.add_reason(
+                    Reason(f"{ key } was not set to pass", explain[key], self.ascribe_risk(value), value)
+                )
+            return report
+    
+    @staticmethod
+    def analyze_x_headers(self, x_header_data: XHeaderInfo):
+        report = Report("X-Header Analysis")
+        AnalyzeXHeaders.analyze_anti_spam_report(
+            x_header_data.anti_spam_report, report
+        )
+        AnalyzeXHeaders.analyze_mb_delievery(
+            x_header_data.mb_delievery, report
+        )
+        AnalyzeXHeaders.anti_spam(report, x_header_data)
+        AnalyzeXHeaders.auth_as(report, x_header_data)
+        AnalyzeXHeaders.org_scl(report, x_header_data)
+        return report
+
+    
+
+
 class AnalyzeAuth:
     
     @staticmethod
@@ -41,20 +86,7 @@ class AnalyzeAuth:
             return "Low"
 
 class AnalyzeXHeaders:
-    
-    @staticmethod
-    def analyze_x_headers(self, x_header_data: XHeaderInfo):
-        report = Report("X-Header Analysis")
-        AnalyzeXHeaders.analyze_anti_spam_report(
-            x_header_data.anti_spam_report, report
-        )
-        AnalyzeXHeaders.analyze_mb_delievery(
-            x_header_data.mb_delievery, report
-        )
-        AnalyzeXHeaders.anti_spam(report, x_header_data)
-        AnalyzeXHeaders.auth_as(report, x_header_data)
-        
-    
+
     @staticmethod
     def analyze_anti_spam_report(anti_spam_report, report: Report) -> None:
         CTRY_EXPL = "The country of the connecting IP address was a Country known for malicious activity."
@@ -92,7 +124,7 @@ class AnalyzeXHeaders:
         }
         data = mb_delievery.raw
         
-        for key, val in explain.items():
+        for key in explain.keys():
             risk = AnalyzeXHeaders.ascribe_risk(data.get(key, "N/A"))
             if risk == "N/A":
                 continue
@@ -131,6 +163,15 @@ class AnalyzeXHeaders:
             report.add_reason(
                 Reason("Auth As Field", ANON_EXPL , "Low", "Anonymous")
             )
+    @staticmethod
+    def org_scl(report: Report, xheader_data: XHeaderInfo):
+        info = xheader_data.ms_exchange_org_scl
+        ORG_EXPL = "The Org SCL field is the Organization Spam Confidence Level field and is used to determine the level of spam confidence for the email. A high Org SCL value indicates that the email is likely to be spam, while a low Org SCL value indicates that the email is likely to be legitimate."
+        risk = AnalyzeXHeaders.ascribe_risk(info)
+        if risk != "N/A":
+            report.add_reason(
+                Reason("Exchange Orgranization SCL Field", ORG_EXPL, risk, info)
+            )
     
     
     @staticmethod
@@ -143,7 +184,7 @@ class AnalyzeXHeaders:
             except ValueError:
                 return "N/A"
              
-            if value == 0:
+            if value <= 0:
                 return "N/A"
 
             elif value > 6:
@@ -155,7 +196,23 @@ class AnalyzeXHeaders:
             else:
                 return "Low"
 
-        
+class AnalyzeReturnPath:
+    
+    @staticmethod
+    def analyze_return_path(self, header_data: HeaderInfo):
+        report = Report("Return Path Analysis")
+        return_path = header_data.return_path
+        if return_path == "Not Found":
+            report.add_reason(
+                Reason("Return Path Field", NOT_FOUND, "N/A", "Not Found")
+            )
+        elif return_path != header_data.sender_email:
+            report.add_reason(
+                Reason("Return Path Field", "The Return Path field does not match the sender email address. This is a common indicator of a phishing email and is a technique used by phishers to trick users into thinking the email is from a legitimate source.", "Medium", return_path)
+            )
+        return report
+    
+
     
         
         

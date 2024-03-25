@@ -23,33 +23,32 @@ class Reason:
         
         
     def __str__(self) -> str:
-        return f"[i] { self.name } [ { self.risk_level } ]\n{ self.explain }"
+        return f"\n[>] { self.name } | { self.risk_level } [<]\n[i] REASON: { self.explain }\n"
 
 
   
 
 class Report:
-    def __init__(self, type: str, who: str) -> None:
+    def __init__(self, type: str) -> None:
         self.reasons: list[Reason] = []
         self.score: int = 0
-        self.title = f"{ type }_report_of_{ who }"
+        self.title = f"{ type }_report"
     
     def add_reason(self, reason: Reason):
         self.reasons.append(reason)
-        self.score += reason.score_amm
+        self.score += reason.score_risk()
     
     def export_report(self):
         file_name = f"{ self.title }.txt"
         with open(file_name, 'w') as file:
             file.write(str(self))
     
-    def short_report(self):
-        print(f"*** { self.title } ***\nTotal Score: { self.score }\n")
+    def console_report(self):
+        total = len(self.reasons * 3)
+        print(f"*** { self.title } ***\nTotal Score: { self.score } / { total }\n")
         for reason in self.reasons:
-            print(f"{ reason.field_name } - { reason.score_amm } [ { reason.risk_level } ]")
-            print("\n")
-            input("[ Press Enter to Continue ]")
-            
+            input(f"{ reason } \n[ Press Enter to Continue ]")
+    
     def __str__(self) -> str:
         report = ""
         for reason in self.reasons:
