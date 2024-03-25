@@ -237,44 +237,63 @@ class BodyInfo:
     
                 
 class BodyAnalyzer:
-    def __init__(self, whois_data: BodyInfo, sender: str) -> None:
-        self.whois_data = whois_data
+    def __init__(self, body_info: BodyInfo, sender: str) -> None:
+        self.body_info = body_info
         self.report = Report("Body", sender)
-        urgency_words = [
-        "urgent", "immediate", "action", "now", "limited", "offer",
-        "expire", "risk", "danger", "warning", "critical", "alert",
-        "important", "immediately", "confirm", "validate", "require",
-        "deadline", "final", "notice", "threat", "security", "protect",
-        "act", "priority", "attention", "secure", "emergency", "verify",
-        "account", "confidential", "mandatory", "protect", "resolve",
-        "response", "safety", "serious", "solve", "stop", "suspend",
-        "verify", "warning", "without delay", "apply", "available",
-        "avoid", "bonus", "caution", "certify", "chance", "claim",
-        "clearance", "deal", "discount", "do not delay", "exclusive",
-        "expiration", "exposed", "hurry", "instantly", "limited time",
-        "new", "offer ends", "once", "only", "order now", "prevent",
-        "protection", "quick", "report", "rush", "safeguard", "save",
-        "scam", "special", "steal", "subscribe", "today", "top priority",
-        "unauthorized", "unlock", "while supplies last", "win", "within",
-        "breach", "crackdown", "enforcement", "click here", "apply now", "click"
-        "buy now", "call now", "claim now", "click below", "click now",
-        "click to get", "click to remove", "collect now", "contact us",
-        "download now", "enroll now", "find out more", "get it now",
-        ]
-        self.URGNCY_WRDS: set = set(urgency_words)
+        
+        
         self.find_urgency()
         self.find_mispelled_words()
-        
-    def find_mispelled_words(self):
-        spell = SpellChecker()
-        words = self.whois_data.body.split()
-        self.misspelled_words = spell.unknown(words)
     
-    def find_keywords(self, body):
-        return list(lambda wrds: wrds.strip(".,!?:;") in self.URGNCY_WRDS, body)
+    @staticmethod    
+    def find_mispelled_words(report, body_info: BodyInfo):
+        spell = SpellChecker()
+        words = body_info.body.split()
+        misspelled_words = spell.unknown(words)
+        return misspelled_words
+    
+    @staticmethod
+    def analyze_words(report: Report, body_info: BodyInfo):
+        EXPLAIN = "Mispelled words are often used in phishing emails either by accident or to avoid detection by spam filters. \nThey are also used to target victims who may not be as attentive to detail."
+        wrd_list = BodyAnalyzer.find_mispelled_words(body_info)
+        risk_lvl = "Low"
+        if not wrd_list: 
+            risk_lvl = "N/A"
+        elif len(wrd_list) > 10: 
+            risk_lvl = "Medium"
+        elif len(wrd_list) > 20:
+            risk_lvl = "High"
+        report.add_reason(
+            Reason("Mispelled Word Analysis",EXPLAIN, risk_lvl, len(wrd_list))
+        )
+        
+    
+    def find_keywords(self, wrd_list: list, body: str):
+        return list(lambda wrds: wrds.strip(".,!?:;") in wrd_list, body)
         
     def find_urgency(self):
-        words = self.whois_data.body.lower().split()
+        urgency_words = [
+            "urgent", "immediate", "action", "now", "limited", "offer",
+            "expire", "risk", "danger", "warning", "critical", "alert",
+            "important", "immediately", "confirm", "validate", "require",
+            "deadline", "final", "notice", "threat", "security", "protect",
+            "act", "priority", "attention", "secure", "emergency", "verify",
+            "account", "confidential", "mandatory", "protect", "resolve",
+            "response", "safety", "serious", "solve", "stop", "suspend",
+            "verify", "warning", "without delay", "apply", "available",
+            "avoid", "bonus", "caution", "certify", "chance", "claim",
+            "clearance", "deal", "discount", "do not delay", "exclusive",
+            "expiration", "exposed", "hurry", "instantly", "limited time",
+            "new", "offer ends", "once", "only", "order now", "prevent",
+            "protection", "quick", "report", "rush", "safeguard", "save",
+            "scam", "special", "steal", "subscribe", "today", "top priority",
+            "unauthorized", "unlock", "while supplies last", "win", "within",
+            "breach", "crackdown", "enforcement", "click here", "apply now", "click"
+            "buy now", "call now", "claim now", "click below", "click now",
+            "click to get", "click to remove", "collect now", "contact us",
+            "download now", "enroll now", "find out more", "get it now",
+        ]
+        words = self.body_info.body.lower().split()
         self.urg_words = self.find_keywords(words)
     
     def generate_report(self):
