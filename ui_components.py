@@ -44,7 +44,7 @@ class MainMenu(MenuUI):
 """
     def __init__(self) -> None:
         CHOICES = [
-            "[ Load Outlook Inbox ]",
+            "[ Load Outlook ]",
             "[ Analysis Tools ]",
             "[ Help / Tutorial ]",
             "[ Exit Program ]"
@@ -67,9 +67,11 @@ class MainMenu(MenuUI):
 
 class FolderMenu(MenuUI):
     def __init__(self, folder_map: dict) -> None:
-        self.choices = [Choice(title=f"[ { name } ]", value=val) for name, val in folder_map.items()]
-        self.prompt = "[ Select a Folder from Outlook to Open ]"
-        super().__init__(self.prompt, self.choices)
+        choices = [Choice(title=f"[ { name } ]", value=val) for name, val in folder_map.items()]
+        choices.append(Choice(title="[ Go Back ]", value="back"))
+        prompt = "[ Select a Folder from Outlook to Open ]"
+        super().__init__(prompt, choices)
+        
 
 
 
@@ -79,7 +81,7 @@ class EmailMenu(MenuUI):
         self.page_size: int = 10
         self.num_pages: int = (len(emails)) // self.page_size
         
-        self.prompt: str = f'Select an Email From your Inbox (Page { self.current_page + 1 }/{ self.num_pages })'
+        self.prompt: str = f'[i] Select an Email From your Inbox (Page { self.current_page + 1 }/{ self.num_pages })'
         self.emails: list = emails
         self.choices: list = []
     
@@ -90,7 +92,7 @@ class EmailMenu(MenuUI):
         if self.current_page < self.num_pages:
             self.choices.append(Choice(title="Next Page", value="next"))
             
-        self.choices.append(Choice(title="Return to Selection", value="folder"))
+        self.choices.append(Choice(title="Return to Folder Selection", value="folder"))
 
     def _render_page(self):
         ''''
@@ -134,43 +136,67 @@ class EmailMenu(MenuUI):
         while self._pager(choice) == False:
             self._render_page()
             choice = self._ask()
-        if choice == "main_menu":
+        if choice == "folder":
             return None
-        
         return choice
     
     
     
-class EmailViewer(MenuUI):
+class EmailActions(MenuUI):
     def __init__(self, email_obj) -> None:
         CHOICES = [
             Choice(title="[ View ]",  value="views"),
-            Choice(title="[ Analyze Body ]",  value="urls"),
-            Choice(title="[ Analyze Header ]", value="header"),
-            Choice(title="[ Analyze Domain ]",  value="whois"),
-            Choice(title="[ Analyze All ]", value="all"),
+            Choice(title="[ Analyze ]", value="anlyze"),
             Choice(title="[ Go Back ]", value="back"),
         ]
         super().__init__(
-            "[ Select Analysis Action to perform on Email ]",
+            "[ Select an Action to perform on Email ]",
+            CHOICES
+        )
+        self.email = email_obj
+
+class ViewerUI(MenuUI):
+    def __init__(self, an_email) -> None:
+        self.email = an_email
+        CHOICES = [
+            Choice(title="[ View Body ]", value="body"),
+            Choice(title="[ View Header ]", value="header"),
+            Choice(title="[ View URLs ]", value="urls"),
+            Choice(title="[ Go Back ]", value="back")
+        ]
+        super().__init__(
+            "[ Select an Option to View ]",
+            CHOICES
+        )
+
+        
+class AnalyzeUI(MenuUI):
+    def __init__(self, email_obj) -> None:
+        CHOICES = [
+            Choice(title="[ Body Analysis ]", value="body"),
+            Choice(title="[ Header Analysis ]", value="header"),
+            Choice(title="[ Domain Analysis ]", value="domain"),
+            Choice(title="[ URL Analysis (limited) ]", value="url"),
+            Choice(title="[ Detailed Analysis (All)]", value="all"),
+            Choice(title="[ Go Back ]", value="back"),
+        ]
+        super().__init__(
+            "[ Select an Analysis Tool ]",
             CHOICES
         )
         self.email = email_obj
         
-        
-class Views:
-    def __init__(self) -> None:
+class ReportUI(MenuUI):
+    def __init__(self):
         CHOICES = [
-            Choice(title="[ View Header ]", value="header"),
-            Choice(title="[ View Email Body ]", value="body"),
-            Choice(title="[ View WhoIs ]", value="whois"),
-            Choice(title="[ View Email Contents ]", value="content"),
+            Choice(title="[ View Results ]", value="view"),
+            Choice(title="[ Save Report ]", value="save"),
             Choice(title="[ Go Back ]", value="back")
         ]
         super().__init__(
-            "[ What would you like to view ]",
+            "[ Select an Action to perform on Email ]",
             CHOICES
-        )
+        )    
         
 
         
@@ -220,7 +246,7 @@ def main() -> None:
         header =  i.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x007D001E")       
         parser = HeaderParser().parsestr(header)
         return_p = parser.get('Return-Path')
-        if "bounces" in return_p or "*" in return_p:
+        if "bounce" in return_p or "*" in return_p:
             print(f"Return Path: {return_p.split("@")[1]}")
         else:
             print(f"Return Path: {return_p}")

@@ -8,7 +8,7 @@ class Reason:
     risk_level: str
     value: str
 
-    def score_risk(self):    
+    def score_risk(self) -> int:    
         if self.risk_level == "N/A":
             return 0
         

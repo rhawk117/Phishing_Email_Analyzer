@@ -3,11 +3,13 @@ from bs4 import BeautifulSoup
 import re as regex
 from urllib.parse import urlparse, parse_qs, unquote
 import whois
-from datetime import datetime
-import os 
+from datetime import datetime 
 from analysis_template import Reason, Report
 from spellchecker import SpellChecker
 from domain_checker import DomainDB
+from pprint import pprint 
+
+
 # NOTE
 # Reason ctor (name: str, val, reason: str, risk: int)
 # Report ctor (type: str, who: str) type is what type of analysis was done, who is the entity analyzed
@@ -85,11 +87,16 @@ class WhoIsAnalyzer:
         if not whois_data.did_query:
             return None
         report = Report(f"WhoIs Report of { whois_data.domain_name }")
-        WhoIsAnalyzer.domain_analysis(report, whois_data)
-        WhoIsAnalyzer.analyze_domain_age(report, whois_data)
-        WhoIsAnalyzer.analyze_expriation_date(report, whois_data)
+        # Cross reference with known malicious domains
+        WhoIsAnalyzer.domain_analysis(report, whois_data) 
+        # Analyze the age of the domain
+        WhoIsAnalyzer.analyze_domain_age(report, whois_data) 
+        # Analyze the expiration date of the domain
+        WhoIsAnalyzer.analyze_expriation_date(report, whois_data) 
+        # Cross reference with known malicious registrars
         WhoIsAnalyzer.analyze_registrar(report, whois_data)
-        WhoIsAnalyzer.is_privacy_protected(report, whois_data)
+        # Check if the domain is privacy protected 
+        WhoIsAnalyzer.is_privacy_protected(report, whois_data) 
         return report
     
     @staticmethod
@@ -97,7 +104,9 @@ class WhoIsAnalyzer:
         EXPLAINATION = "The program uses a list of known malicious/comprimised domain names to check if the domain name is present in the list"
         domain_names = whois_data.domain_name
         if domain_names is None:
-            report.add_reason(Reason("Domain Name Blacklist Check", EXPLAINATION, "N/A", domain_names))
+            report.add_reason(
+                Reason("Domain Name Blacklist Check", EXPLAINATION, "N/A", domain_names)
+            )
             
         domain_db = DomainDB()
         for domains in domain_names:
@@ -185,7 +194,7 @@ class BodyInfo:
         self.email = email
         self.body = email.Body
         self.urls = self.extract_urls(self.body)
-        
+        self.has_urls = len(self.urls) > 0
     
     def extract_urls(self, email_body) -> list:
         urls = []
@@ -221,58 +230,65 @@ class BodyInfo:
             return url
         return unquote(original_url)
     
-    def view_body(self):
+    def view_body(self) -> None:
+        frmt = f"{"*" * 60}"
         print(f"Subject: { self.email.Subject }")
         print(f"From: { self.email.SenderName } ({ self.email.SenderEmailAddress })")
-        print(f"Date: { self.email.ReceivedTime }")
-        print(f"{'*' * 60}\n{ self.body } \n{'*' * 60}")
+        print(f"Date: { self.email.ReceivedTime }\n{ frmt }\n")
+        pprint(self.body, indent=3)     
+        print(frmt)     
+    
+    def view_header(self, header) -> None:
+        pprint(header, indent=4)
+    
     
     def view_urls(self):
         if not self.urls:
             print("[!] No URLs were found in the email body... [!]")
             return
+        
         print("[ URLs Found in Email Body ]")
         for url in self.urls:
             print(f'\t[>] { url }\n')
     
                 
 class BodyAnalyzer:
-    def __init__(self, body_info: BodyInfo, sender: str) -> None:
-        self.body_info = body_info
-        self.report = Report("Body", sender)
-        
-        
-        self.find_urgency()
-        self.find_mispelled_words()
-    
+
     @staticmethod    
-    def find_mispelled_words(report, body_info: BodyInfo):
+    def find_mispelled_words(report: Report, body_info: BodyInfo) -> set[str]:
         spell = SpellChecker()
         words = body_info.body.split()
-        misspelled_words = spell.unknown(words)
+        misspelled_words: set[str] = spell.unknown(words)
         return misspelled_words
-    
+
+     
     @staticmethod
     def analyze_words(report: Report, body_info: BodyInfo):
         EXPLAIN = "Mispelled words are often used in phishing emails either by accident or to avoid detection by spam filters. \nThey are also used to target victims who may not be as attentive to detail."
         wrd_list = BodyAnalyzer.find_mispelled_words(body_info)
-        risk_lvl = "Low"
-        if not wrd_list: 
-            risk_lvl = "N/A"
-        elif len(wrd_list) > 10: 
-            risk_lvl = "Medium"
-        elif len(wrd_list) > 20:
-            risk_lvl = "High"
+        risk = BodyAnalyzer.wrd_count_risk(wrd_list)
         report.add_reason(
-            Reason("Mispelled Word Analysis",EXPLAIN, risk_lvl, len(wrd_list))
+            Reason("Mispelled Word Analysis", EXPLAIN, risk, len(wrd_list))
         )
         
-    
-    def find_keywords(self, wrd_list: list, body: str):
-        return list(lambda wrds: wrds.strip(".,!?:;") in wrd_list, body)
+    @staticmethod
+    def wrd_count_risk(wrds_found: list) -> str:
+        risk_lvl = "Low"
+        if not wrds_found: 
+            risk_lvl = "N/A"
+        elif len(wrds_found) > 10: 
+            risk_lvl = "Medium"
+        elif len(wrds_found) > 20:
+            risk_lvl = "High"    
+        return risk_lvl
         
-    def find_urgency(self):
-        urgency_words = [
+    @staticmethod
+    def find_keywords(wrd_list: list, body: str):
+        return list(lambda wrds: wrds.strip(".,!?:;") in wrd_list, body)
+    
+    @staticmethod
+    def find_urgency(report: Report, body_info: BodyInfo):
+        urg_wrds = [
             "urgent", "immediate", "action", "now", "limited", "offer",
             "expire", "risk", "danger", "warning", "critical", "alert",
             "important", "immediately", "confirm", "validate", "require",
@@ -293,56 +309,76 @@ class BodyAnalyzer:
             "click to get", "click to remove", "collect now", "contact us",
             "download now", "enroll now", "find out more", "get it now",
         ]
-        words = self.body_info.body.lower().split()
-        self.urg_words = self.find_keywords(words)
-    
-    def generate_report(self):
-        EXPLAIN_URG = "Threat actors often use a sense of urgency to provoke fear and panic in their victims. \nThis is a common tactic used in phishing emails to get the victim to act without thinking."
-        EXPLAIN_MIS = "Mispelled words are often used in phishing emails either by accident or to avoid detection by spam filters. \nThey are also used to target victims who may not be as attentive to detail."
-        self.report.add_reason(
-            Reason("Urgency Analysis", self.urg_words, EXPLAIN_URG, len(self.urg_words))
+        EXPL = "Threat actors often use a sense of urgency to provoke fear and panic in their victims. \nThis is a common tactic used in phishing emails to get the victim to act without thinking."
+        words = body_info.body.lower().split()
+        urgency = BodyAnalyzer.find_keywords(urg_wrds, words)
+        risk = BodyAnalyzer.wrd_count_risk(urg_wrds)
+        report.add_reason(
+            Reason("Urgency Analysis", EXPL, risk, len(urgency))
         )
-        self.report.add_reason(
-            Reason("Mispelled Word Analysis", self.misspelled_words, EXPLAIN_MIS, len(self.misspelled_words))
-        )
+        
+    @staticmethod
+    def analyze(body_info: BodyInfo) -> Report:
+        report =  Report("Body Analysis")
+        BodyAnalyzer.analyze_words(report, body_info)
+        BodyAnalyzer.find_urgency(report, body_info)
+        return report
     
-        
-class AuthResults:
-    def __init__(self, header: str) -> None:
-        self.results = self.get_authentication_results(header)
-        self.spf = None
-        self.dkim = None
-        self.dmarc = None
-        [setattr(self, key, value) for key, value in self.results.items()]
-        
-    def get_authentication_results(self, email_header) -> dict:
-        patterns = {
-            'spf': r'spf=(\w+)',
-            'dkim': r'dkim=(\w+)',
-            'dmarc': r'dmarc=(\w+)'
-        }
-        auth_results = {}
-        for key, pattern in patterns.items():
-            match = regex.search(pattern, email_header, regex.IGNORECASE)
-            
-            if match:
-                auth_results[key] = match.group(1)
-                continue
-            auth_results[key] = "Not Found"
-        return auth_results
-        
-            
+    
 
-    def __str__(self) -> str:
-        return f"[ AUTHENTICATION RESULTS ]\n SPF: { self.spf } \n DKIM: { self.dkim } \n DMARC: { self.dmarc }"
+
+class URLAnalysis:
+    
+    @staticmethod
+    def analyze_all(body_info: BodyInfo) -> list[Report]:
+        if not body_info.urls:
+            return []
+        return [URLAnalysis.analyze_all(url) for url in body_info.urls]
+    
+    @staticmethod   
+    def analyze_url(url: str):
+        report = Report(f"URL Analysis of { url }")
+        URLAnalysis.heuristic_check(report, url)
+        URLAnalysis.pattern_analysis(report, url)
+        return report
+    
+    @staticmethod
+    def heuristic_check(report: Report, url: str) -> None:
+        keywords = [
+            "login", "register", "account", "secure", "verify", "confirm",
+            "update", "change", "password", "email", "username", "profile",
+            "settings", "billing", "payment", "order", "invoice", "receipt",
+            "transaction", "shipping", "delivery", "purchase", "order",
+        ]
+        EXPL = "Threat actors often use URLs that contain keywords related to account management, payment and personal information to trick victims into clicking on malicious links."
+        tmp = url.lower()
+        for wrd in keywords:
+            if not wrd in tmp:
+                continue
+            report.add_reason(
+                Reason("Suspicious Word Found In URL", EXPL, "Medium", wrd)
+            )
+            
+    @staticmethod
+    def pattern_analysis(report: Report, url: str):
+        patterns = {
+            "Obfuscated EXE" : [r"[./&%\?=_]\.exe", "High"],
+            "URL Encoded with Forward Slash" :  [r"\/\%[0-9A-F]{2}", "Medium"],
+            "Long Sequence of Digits" : [r"\d{10,}", "Low"],
+        } 
+        EXPL = "Malicious URLs will often feature encoded forward slashes, obfuscated executables or a long sequence of digits to help hide the paylod of the URL"
+        for key, val in patterns.items():
+            if regex.search(val[0], url):
+                report.add_reason(
+                    Reason(f"URL Pattern Analysis: { key }", EXPL, val[1], url)
+                )
+    
         
-    def score(self) -> int:
-        score = 0
-        for value in self.results.values():
-            if value != 'pass':
-                score += 5
-        return score
         
+        
+    
+        
+
 
     
     

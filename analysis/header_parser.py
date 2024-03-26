@@ -2,11 +2,10 @@ from client_manager import Client
 from datetime import datetime
 import whois
 from dataclasses import dataclass
-import os 
 import re
 from pprint import pprint
 from email.parser import HeaderParser
-
+from analysis_template import Report
 
 class HeaderExtractor:
     def __init__(self, header_str: str) -> None:
@@ -41,6 +40,9 @@ class HeaderExtractor:
     def data(self) -> dict:
         pass
     
+    def analyze(self) -> Report:
+        pass
+    
 # FIELDS 
 
 # X-Microsoft-Antispam-Mailbox-Delivery
@@ -72,8 +74,9 @@ class MS_AntiSpam_Report:
     def __str__(self):
         return f"\nCIP: {self.cip}\n CTRY: {self.ctry}\n IPV: {self.ipv}\n"
 
-@staticmethod
+
 class XSplicer:
+    
     @staticmethod
     def fetch(self, data: dict, srch_val:str):
         return self.data.get(srch_val, "Not Found")
@@ -107,6 +110,7 @@ class XSplicer:
         for fields in field_val.split(";"):
             key, val = fields.split(":")
             data[key] = val
+            
         return data
 
 
@@ -146,10 +150,10 @@ class XHeaderInfo(HeaderExtractor):
         }
     def __str__(self) -> str:
         return "[ X-Header Information ]\n" + \
-                f"X-Forefront-Antispam-Report: {self.anti_spam_report}\n" + \
+                f"X-Forefront-Antispam-Report\n {self.anti_spam_report}\n" + \
                 f"X-MS-Exchange-Organization-SCL: {self.ms_exchange_org_scl}\n" + \
                 f"X-Microsoft-Antispam: {self.ms_anti_spam}\n" + \
-                f"X-Microsoft-Antispam-Mailbox-Delivery: {self.anti_spam_mbox}\n" + \
+                f"X-Microsoft-Antispam-Mailbox-Delivery\n {self.anti_spam_mbox}\n" + \
                 f"X-MS-Exchange-Organization-AuthAs: {self.auth_as}\n" \
                 
     
@@ -182,7 +186,6 @@ class AuthResults(HeaderExtractor):
         self.dmarc = None
         self.compauth = None
         super.__init__(header_str)
-        self.parse_fields()
 
     def parse_fields(self) -> None:
         self.parse_auth_results()
@@ -219,28 +222,15 @@ class AuthResults(HeaderExtractor):
         return f"\n[ Authentication Results ]\n SPF: {self.spf}\n DKIM: {self.dkim}\n DMARC: {self.dmarc}\n CompAuth: {self.compauth}\n"
 
 
-class EmailData:
-    def __init(self, header_str: str) -> None:
-        self.x_headers = XHeaderInfo(header_str)
-        self.headers = HeaderInfo(header_str)
-        self.auth_results = AuthResults(header_str)
         
 
 
 
 
 def main() -> None:
-    client = Client()
-    if not client.safe_load():
-        print("[!] Failed to load client... [!]")
-        return 
-    emails = client.get_folder_emails("Inbox")
-    email = emails[0]
-    header = email.Header
-    email_data = EmailData(header)
-    email_data.x_headers.display()
-    email_data.headers.display()
-    email_data.auth_results.display()
+    pass
+    
+
 
 if __name__ == "__main__":
     main()    

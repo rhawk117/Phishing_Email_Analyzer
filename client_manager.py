@@ -47,6 +47,12 @@ class Client:
             return None
         return list(filter(lambda x: x.Class == 43, folder_obj.Items)) 
 
+    @property
+    def get_header(self, email) -> str:
+        return email.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x007D001E")
+    
+    
+    
 
 class olHelper:
     '''
@@ -90,6 +96,7 @@ class olHelper:
     @staticmethod
     def map_folders(folders) -> dict:
         return {folder.Name: folder for folder in folders}
+
 
 
 

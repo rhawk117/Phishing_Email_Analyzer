@@ -1,6 +1,9 @@
 import os 
 import ui_components as UI
 from client_manager import Client
+import analysis.analysis_results as Analyzer
+import analysis.analyze_misc as MiscData
+from analysis.analysis_results import EmailData as Results
 
 
 class App:
@@ -74,23 +77,86 @@ class UIComponents:
         choice = self.email_viewer.run()
         if choice == "back":
             self.email_flow_control()
+            
         elif choice == "views":
             self.view_control(email)
-        else:
-            pass
             
-    def view_control(self, email):
+        elif choice == "anlyze":
+            self.analyze_control(email)
+            
+    def view_control(self, email, body_info: MiscData.BodyInfo = None):
         self.viewer = UI.ViewerUI(email)
         choice = self.viewer.run()
         if choice == "back":
             self.email_actions(email)
         else:
+            if body_info is None:
+                body_info = MiscData.BodyInfo(email)
+            self.viewer_hndler(
+                choice, body_info
+            )
+    
+    def viewer_hndler(self, choice: str, body_info: MiscData.BodyInfo) -> None:
+        if choice == "body":
+            body_info.view_body()
+            
+        elif choice == "header":
+            hdr = self.user_agent.get_header(body_info.email)
+            body_info.view_header(hdr)
+            
+        elif choice == "urls":
+            body_info.view_urls()
+            
+        input("[ Press Enter to Continue ]")
+        self.view_control(body_info.email, body_info)
+        
+    def analyze_control(self, email):
+        analyze = UI.AnalyzeUI(email)
+        choice = analyze.run()
+        if choice == "back":
+            self.view_control()
+        else:
+            self.report_control(
+                self.handle_analysis(choice, email)
+                , email
+            )
+             
+        
+    def handle_analysis(self, choice: str, email):
+        print(f"[i] Performing a { choice.title() } analysis and generating a report...")
+        if choice == "body":
+            report = Results.analyze_body(email)
+
+        elif choice == "header":
+            report = Results.analyze_headers(email)
+
+        elif choice == "domain":
+            report = Results.analyze_whois(email)
+
+        elif choice == "url":
+            report = Results.analyze_urls(email)
+
+        elif choice == "all":
+            report = Results(email).analyze_all()
+            
+        return report
+    
+    def report_control(self, report, email) -> None:
+        reportUI = UI.ReportUI()
+        choice = reportUI.run()
+        if choice == "back":
+            self.analyze_control(email)
+            
+        elif choice == "view":
+            
+        elif choice == "save":
             pass
     
-    def viewer_hndler(self, email):
-        self.view_control(email)
+    def report_types(self, report):
+        if isinstance(report, list):
+            pass
+        else:
             
-                
             
     
             
