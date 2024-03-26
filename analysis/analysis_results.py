@@ -2,8 +2,8 @@ from analyze_header import AnalyzeMaster
 from analysis_template import Report
 from header_parser import XHeaderInfo, HeaderInfo, AuthResults
 from analyze_misc import WhoIsInfo, WhoIsAnalyzer, BodyInfo, BodyAnalyzer, URLAnalysis
-
-
+from pathlib import Path
+import sys 
 
 class EmailData:
     
@@ -79,19 +79,28 @@ class EmailData:
     
 class Output:
     
-    # NOTE stopped here 
-    def manyReports(report: Report | list[Report]) -> bool:
-        return isinstance(report, )
-    
     @staticmethod 
     def console_output(report: Report):
-        pass
-    
-    @staticmethod 
-    def export_results(report: Report):
-        pass
+        Output.iter_reports(report)
+
     
     @staticmethod
-    def export(report: Report):
-        pass
+    def iter_reports(self, report):
+        if not isinstance(report, list):
+            Output.console_output(report)
+            return
+        for r in report:
+            if not isinstance(report, list):
+                Output.console_output(r)
+                continue
+            Output.iter_reports(r)
     
+    @staticmethod 
+    def export(report: Report | list[Report]):
+        exe_path = Path(sys.argv[0]).parent.absolute()
+        Report.export(report, exe_path)
+    
+    
+        
+        
+

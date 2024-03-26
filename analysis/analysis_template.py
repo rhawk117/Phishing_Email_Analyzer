@@ -1,5 +1,7 @@
 
 from dataclasses import dataclass
+import os 
+from datetime import datetime as dt
 
 @dataclass
 class Reason:
@@ -38,10 +40,33 @@ class Report:
         self.reasons.append(reason)
         self.score += reason.score_risk()
     
-    def export_report(self):
-        file_name = f"{ self.title }.txt"
-        with open(file_name, 'w') as file:
-            file.write(str(self))
+    @staticmethod
+    def export_path_checks(report, output_path: str) -> bool:
+        if not os.path.exists(output_path):
+            os.mkdir(output_path)
+            
+        file_n = f"{ report.title }_{ dt.now() }.txt"
+        path = os.path.join(output_path, file_n)
+        return path
+    
+    @staticmethod
+    def export(report, output_path: str) -> bool:
+        path = Report.export_path_checks(report, output_path)
+        content = ""
+        if isinstance(report, list):
+            content = [f'{ r }\n\n' for r in report]
+        else:
+            content = str(report)
+        try:
+            Report._export(path, content)
+        except Exception as e:
+            print(f"[!] Error exporting report: { e }")
+            
+        
+    def _export(self, path, content):
+        with open(path, "w") as file:
+            file.write(content)
+    
     
     def console_report(self):
         total = len(self.reasons * 3)

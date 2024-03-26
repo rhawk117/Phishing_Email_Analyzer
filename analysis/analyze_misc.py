@@ -333,8 +333,9 @@ class URLAnalysis:
     def analyze_all(body_info: BodyInfo) -> list[Report]:
         if not body_info.urls:
             return []
-        return [URLAnalysis.analyze_all(url) for url in body_info.urls]
-    
+        reports = [URLAnalysis.analyze_url(url) for url in body_info.urls]
+        return reports
+        
     @staticmethod   
     def analyze_url(url: str):
         report = Report(f"URL Analysis of { url }")
@@ -356,7 +357,7 @@ class URLAnalysis:
             if not wrd in tmp:
                 continue
             report.add_reason(
-                Reason("Suspicious Word Found In URL", EXPL, "Medium", wrd)
+                Reason(f"Suspicious Word Found In URL => { url }", EXPL, "Medium", wrd)
             )
             
     @staticmethod
@@ -370,7 +371,7 @@ class URLAnalysis:
         for key, val in patterns.items():
             if regex.search(val[0], url):
                 report.add_reason(
-                    Reason(f"URL Pattern Analysis: { key }", EXPL, val[1], url)
+                    Reason(f"URL ({ url }) Pattern Analysis: { key }", EXPL, val[1], url)
                 )
     
         

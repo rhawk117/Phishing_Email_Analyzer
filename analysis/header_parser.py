@@ -43,15 +43,6 @@ class HeaderExtractor:
     def analyze(self) -> Report:
         pass
     
-# FIELDS 
-
-# X-Microsoft-Antispam-Mailbox-Delivery
-
-# all should be 0
-# ucf - user confidence field 
-# jmr - junk mail reason
-# auth - authentication 
-
 
 @dataclass
 class AntiSpamMailboxDelivery:

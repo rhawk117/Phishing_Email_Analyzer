@@ -3,23 +3,27 @@ import ui_components as UI
 from client_manager import Client
 import analysis.analysis_results as Analyzer
 import analysis.analyze_misc as MiscData
-from analysis.analysis_results import EmailData as Results
-
+from analysis.analysis_results import EmailData as Results, Output
+import traceback
 
 class App:
     def __init__(self) -> None:
         self.ui = UIComponents()
     
     def run(self) -> None:
-        pass
-
+        try:
+            self.ui.start()
+        except Exception as err:
+            input(f"[!] bruh exception, press enter\n { err }")
+            input(f"Traceback: { traceback.format_exc() }")
+            input(f"{traceback.print_exc()}\n{traceback.print_stack()}")
+            
 class UIComponents:
     def __init__(self, client):
         self.main_menu: UI.MainMenu = UI.MainMenu(self)
         self.email_menu: UI.EmailMenu = None
         self.email_viewer: UI.EmailViewer = None
         self.folder_viewer: UI.FolderViewer = None
-        self.layer: UI.MenuUI = None
         self.user_agent: Client = None
         
     def start(self):
@@ -70,7 +74,7 @@ class UIComponents:
         if email == "back":
             self.ol_flow_control()
         else:
-            pass
+            self.email_actions(email)
     
     def email_actions(self, email):
         self.email_viewer = UI.EmailActions(email)
@@ -146,17 +150,16 @@ class UIComponents:
         choice = reportUI.run()
         if choice == "back":
             self.analyze_control(email)
-            
-        elif choice == "view":
-            
-        elif choice == "save":
-            pass
-    
-    def report_types(self, report):
-        if isinstance(report, list):
-            pass
         else:
+            self.report_handler(choice, report)
             
+    def report_handler(self, choice, report):
+        if choice == "view":
+            Output.console_output(report)
+        elif choice == "save":
+            Output.export(report)
+        input("[ Press 'Enter' to return to the Main Menu ]")
+        self.start()
             
     
             
