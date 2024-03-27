@@ -1,8 +1,7 @@
 import os 
 import ui_components as UI
 from client_manager import Client
-import analysis.analysis_results as Analyzer
-import analysis.analyze_misc as MiscData
+from analysis import analyze_misc as MiscData
 from analysis.analysis_results import EmailData as Results, Output
 import traceback
 

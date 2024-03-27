@@ -2,8 +2,6 @@ from client_manager import Client
 from questionary import Choice, prompt
 import sys
 from time import sleep
-import analysis
-
 
 
 class MenuUI:

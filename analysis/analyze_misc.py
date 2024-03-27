@@ -1,4 +1,3 @@
-from typing import Any
 from bs4 import BeautifulSoup
 import re as regex
 from urllib.parse import urlparse, parse_qs, unquote

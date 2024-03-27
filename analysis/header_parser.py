@@ -210,7 +210,9 @@ class AuthResults(HeaderExtractor):
         }
     
     def __str__(self) -> str:
-        return f"\n[ Authentication Results ]\n SPF: {self.spf}\n DKIM: {self.dkim}\n DMARC: {self.dmarc}\n CompAuth: {self.compauth}\n"
+        return f"\n[ Authentication Results ]" + \
+            f"SPF: {self.spf}\n DKIM: {self.dkim}\n" + \
+            f"DMARC: {self.dmarc}\n CompAuth: {self.compauth}\n"
 
 
         
